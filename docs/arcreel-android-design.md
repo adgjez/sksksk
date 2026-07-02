@@ -1,7 +1,8 @@
-# ArcReel Android 设计文档
+# ArcReel Android 设计文档 v2（修复版）
 
 > 日期：2026-07-02
 > 基于：Legado (阅读Sigma) + ArcReel 全流程深度集成
+> 版本：v2.0（修复版）
 
 ---
 
@@ -18,21 +19,60 @@
 | 层 | 技术 |
 |---|---|
 | UI | Jetpack Compose + Material 3 + Navigation Compose |
-| 架构 | MVVM + Clean Architecture（data/domain/ui 三层） |
-| 数据库 | Room (KSP) |
+| 架构 | MVVM + Clean Architecture（data/domain/usecase/ui 四层） |
+| 后台任务 | WorkManager + Foreground Service |
+| 数据库 | Room (KSP) + 外键约束 + 索引 |
 | 网络 | OkHttp + Retrofit + Kotlinx Serialization |
 | 异步 | Kotlin Coroutines + Flow |
-| 编排引擎 | 自定义 Orchestrator（协程状态机） |
-| 视频合成 | mobile-ffmpeg |
+| 编排引擎 | PipelineExecutor（WorkManager 内执行） |
+| 视频合成 | ffmpeg-kit-min（~5 MB） |
 | 图片加载 | Glide（复用现有） |
+| 安全存储 | EncryptedSharedPreferences（Jetpack Security） |
 | DI | Hilt |
-| 最低 SDK | 21 (Android 5.0) |
+| 最低 SDK | 23 (Android 6.0) |
 | 编译 SDK | 36 |
-| 语言 | Kotlin 2.3 |
+| 语言 | Kotlin |
 
 ---
 
-## 三、模块结构
+## 三、架构分层（修复后）
+
+```
+domain/                          # 纯 Kotlin，不依赖 Android
+├── model/                       # 领域模型
+├── usecase/
+│   └── PipelineUseCase.kt       # 仅接口定义
+└── orchestrator/
+    ├── PipelineStep.kt          # 步骤接口
+    ├── PipelineContext.kt       # 上下文
+    └── PipelineProgress.kt      # 进度模型
+
+data/                            # 实现层
+├── local/                       # Room 数据库
+├── remote/                      # 供应商 API（submit/poll/download）
+├── repository/                  # 数据仓库
+├── executor/
+│   ├── PipelineExecutor.kt      # 具体编排实现
+│   ├── PipelineWorker.kt        # WorkManager CoroutineWorker
+│   └── steps/                   # 各步骤实现
+└── security/
+    └── ApiKeyStore.kt           # EncryptedSharedPreferences
+
+ui/                              # Compose UI
+├── generation/
+│   └── GenerationScreen.kt     # 订阅 WorkInfo 进度
+└── ...
+```
+
+### 关键变化
+
+1. **domain 层无 Android 依赖**：`PipelineUseCase` 仅定义接口，具体实现在 `data/executor/`
+2. **Orchestrator → PipelineExecutor**：从 `domain/orchestrator/` 移到 `data/executor/`
+3. **WorkManager 承载**：所有生成任务通过 `PipelineWorker` 在后台执行，`Foreground Service` 保活
+
+---
+
+## 四、模块结构
 
 ```
 legado/
@@ -45,96 +85,96 @@ legado/
 │       └── src/main/java/io/legado/arcreel/
 │           ├── data/
 │           │   ├── local/
-│           │   │   ├── ArcreelDatabase.kt       # Room 数据库
+│           │   │   ├── ArcreelDatabase.kt
 │           │   │   ├── dao/
 │           │   │   │   ├── ProjectDao.kt
 │           │   │   │   ├── ScriptDao.kt
+│           │   │   │   ├── ShotDao.kt              # 新增：独立 Shot 表
+│           │   │   │   ├── SegmentDao.kt           # 新增：独立 Segment 表
 │           │   │   │   ├── CharacterDao.kt
 │           │   │   │   ├── PropDao.kt
 │           │   │   │   ├── AssetDao.kt
 │           │   │   │   ├── TaskDao.kt
 │           │   │   │   └── ReferenceVideoDao.kt
 │           │   │   └── entity/
-│           │   │       ├── ProjectEntity.kt
-│           │   │       ├── ScriptEntity.kt       # 剧本 + 分镜
+│           │   │       ├── ProjectEntity.kt        # 自增 ID 主键
+│           │   │       ├── ScriptEntity.kt
+│           │   │       ├── SegmentEntity.kt        # 新增：独立段表
+│           │   │       ├── ShotEntity.kt           # 新增：独立镜头表
 │           │   │       ├── CharacterEntity.kt
 │           │   │       ├── PropEntity.kt
 │           │   │       ├── AssetEntity.kt
 │           │   │       ├── TaskEntity.kt
 │           │   │       └── ReferenceVideoEntity.kt
 │           │   ├── remote/
-│           │   │   ├── provider/                 # 各 AI 供应商 API
-│           │   │   │   ├── ProviderApi.kt        # 统一接口
+│           │   │   ├── provider/
+│           │   │   │   ├── ProviderApi.kt          # 拆分：submit/poll/download
+│           │   │   │   ├── KlingApi.kt             # 可灵（异步轮询）
+│           │   │   │   ├── ViduApi.kt              # Vidu（异步轮询）
 │           │   │   │   ├── GeminiApi.kt
-│           │   │   │   ├── ArkApi.kt             # 火山方舟
+│           │   │   │   ├── ArkApi.kt
 │           │   │   │   ├── GrokApi.kt
 │           │   │   │   ├── OpenAIApi.kt
-│           │   │   │   ├── ViduApi.kt
-│           │   │   │   ├── DashScopeApi.kt       # 阿里百炼
+│           │   │   │   ├── DashScopeApi.kt
 │           │   │   │   ├── MiniMaxApi.kt
-│           │   │   │   ├── KlingApi.kt           # 可灵
-│           │   │   │   ├── AgnesApi.kt           # 自定义
-│           │   │   │   └── NewApiApi.kt          # 自定义
+│           │   │   │   └── CustomApi.kt
 │           │   │   └── model/
-│           │   │       ├── ApiModels.kt          # 请求/响应 DTO
+│           │   │       ├── ApiModels.kt
 │           │   │       └── ProviderConfig.kt
-│           │   └── repository/
-│           │       ├── ProjectRepository.kt
-│           │       ├── ScriptRepository.kt
-│           │       ├── GenerationRepository.kt
-│           │       ├── ProviderRepository.kt
-│           │       └── ConfigRepository.kt
+│           │   ├── repository/
+│           │   │   ├── ProjectRepository.kt
+│           │   │   ├── ScriptRepository.kt
+│           │   │   ├── ShotRepository.kt           # 新增
+│           │   │   ├── GenerationRepository.kt
+│           │   │   ├── ProviderRepository.kt
+│           │   │   └── ConfigRepository.kt
+│           │   ├── executor/
+│           │   │   ├── PipelineExecutor.kt         # 编排实现
+│           │   │   ├── PipelineWorker.kt           # WorkManager
+│           │   │   ├── ForegroundService.kt        # 前台服务保活
+│           │   │   └── steps/
+│           │   │       ├── ParseSourceStep.kt
+│           │   │       ├── ExtractCharactersStep.kt
+│           │   │       ├── GenerateScriptStep.kt
+│           │   │       ├── ReviewScriptStep.kt
+│           │   │       ├── PlanStoryboardStep.kt
+│           │   │       ├── GenerateImagesStep.kt
+│           │   │       ├── GenerateVideosStep.kt
+│           │   │       ├── GenerateTtsStep.kt
+│           │   │       └── ComposeVideoStep.kt
+│           │   └── security/
+│           │       └── ApiKeyStore.kt              # 加密存储
 │           ├── domain/
 │           │   ├── model/
 │           │   │   ├── Project.kt
-│           │   │   ├── Script.kt                # 剧本核心模型
-│           │   │   ├── Storyboard.kt            # 分镜模型
+│           │   │   ├── Script.kt
+│           │   │   ├── Shot.kt
 │           │   │   ├── Character.kt
 │           │   │   ├── Prop.kt
 │           │   │   ├── GenerationTask.kt
 │           │   │   └── ReferenceVideo.kt
-│           │   ├── orchestrator/
-│           │   │   ├── Orchestrator.kt          # 核心编排引擎
-│           │   │   ├── PipelineStep.kt          # 步骤接口
-│           │   │   └── steps/
-│           │   │       ├── ParseSourceStep.kt    # 1. 解析源文件
-│           │   │       ├── ExtractCharactersStep.kt  # 2. 全局角色提取
-│           │   │       ├── GenerateScriptStep.kt     # 3. 剧本生成
-│           │   │       ├── ReviewScriptStep.kt       # 4. 剧本审阅
-│           │   │       ├── PlanStoryboardStep.kt     # 5. 分镜规划
-│           │   │       ├── GenerateImagesStep.kt     # 6. 图片生成
-│           │   │       ├── GenerateVideosStep.kt     # 7. 视频生成
-│           │   │       ├── GenerateTtsStep.kt        # 8. TTS 配音
-│           │   │       └── ComposeVideoStep.kt       # 9. 视频合成
-│           │   ├── generator/
-│           │   │   ├── ImageGenerator.kt
-│           │   │   ├── VideoGenerator.kt
-│           │   │   ├── TtsGenerator.kt
-│           │   │   └── TextGenerator.kt
-│           │   ├── parser/
-│           │   │   ├── SourceParser.kt          # 统一接口
-│           │   │   ├── TxtParser.kt
-│           │   │   └── EpubParser.kt
-│           │   ├── queue/
-│           │   │   ├── TaskQueue.kt             # 协程任务队列
-│           │   │   ├── RateLimiter.kt            # RPM 速率限制
-│           │   │   └── ResumeManager.kt          # 断点续传
-│           │   └── prompt/
-│           │       ├── PromptTemplates.kt        # 提示词模板（从 ArcReel 迁移）
-│           │       └── PromptBuilders.kt          # 提示词构建器
+│           │   ├── usecase/
+│           │   │   └── PipelineUseCase.kt          # 接口定义
+│           │   └── orchestrator/
+│           │       ├── PipelineStep.kt
+│           │       ├── PipelineContext.kt
+│           │       └── PipelineProgress.kt
 │           ├── ui/
+│           │   ├── ArcreelEntry.kt
+│           │   ├── ArcreelFragment.kt
 │           │   ├── navigation/
-│           │   │   └── ArcreelNavGraph.kt       # 导航图
+│           │   │   └── ArcreelNavGraph.kt
 │           │   ├── project/
 │           │   │   ├── ProjectListScreen.kt
 │           │   │   ├── CreateProjectScreen.kt
-│           │   │   └── ProjectSettingsScreen.kt
+│           │   │   ├── ProjectSettingsScreen.kt
+│           │   │   └── CostEstimateDialog.kt       # 新增：成本预估
 │           │   ├── script/
-│           │   │   ├── ScriptScreen.kt          # 剧本查看
-│           │   │   ├── ScriptEditScreen.kt      # 剧本编辑
-│           │   │   └── ScriptReviewScreen.kt   # 剧本审阅
+│           │   │   ├── ScriptScreen.kt
+│           │   │   ├── ScriptEditScreen.kt
+│           │   │   └── ScriptReviewScreen.kt
 │           │   ├── storyboard/
-│           │   │   ├── StoryboardScreen.kt      # 分镜列表
+│           │   │   ├── StoryboardScreen.kt
 │           │   │   └── StoryboardDetailScreen.kt
 │           │   ├── character/
 │           │   │   ├── CharacterListScreen.kt
@@ -142,9 +182,10 @@ legado/
 │           │   ├── asset/
 │           │   │   └── AssetLibraryScreen.kt
 │           │   ├── generation/
-│           │   │   └── GenerationScreen.kt      # 生成进度 + 任务管理
+│           │   │   ├── GenerationScreen.kt
+│           │   │   └── GenerationViewModel.kt
 │           │   ├── assistant/
-│           │   │   └── AssistantScreen.kt       # AI 助手
+│           │   │   └── AssistantScreen.kt
 │           │   ├── reference/
 │           │   │   └── ReferenceVideoScreen.kt
 │           │   ├── settings/
@@ -152,106 +193,164 @@ legado/
 │           │   │   └── GlobalSettingsScreen.kt
 │           │   ├── export/
 │           │   │   └── ExportScreen.kt
-│           │   └── component/                   # 共享组件
+│           │   └── component/
 │           │       ├── StoryboardCard.kt
 │           │       ├── ProgressStepper.kt
 │           │       ├── VideoPlayer.kt
-│           │       ├── FilterChip.kt
-│           │       └── ...
-│           ├── di/
-│           │   ├── DatabaseModule.kt
-│           │   ├── NetworkModule.kt
-│           │   ├── RepositoryModule.kt
-│           │   └── OrchestratorModule.kt
-│           └── ArcreelEntry.kt                  # 入口 Composable
+│           │       └── FilterChip.kt
+│           └── di/
+│               ├── DatabaseModule.kt
+│               ├── NetworkModule.kt
+│               ├── WorkManagerModule.kt            # 新增
+│               ├── SecurityModule.kt               # 新增
+│               └── ExecutorModule.kt               # 新增
 ```
 
 ---
 
-## 四、核心数据模型
+## 五、核心数据模型（修复后）
 
-### 4.1 项目（Project）
+### 5.1 项目（Project）— 自增 ID 主键
 
 ```kotlin
-@Entity(tableName = "projects")
+@Entity(
+    tableName = "arcreel_projects",
+    indices = [Index(value = ["name"], unique = true)]
+)
 data class ProjectEntity(
-    @PrimaryKey val name: String,           // 唯一标识
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val name: String,                    // 唯一索引，可重命名
     val title: String,
-    val sourceKind: String,                 // "novel" | "screenplay"
-    val contentMode: String,                // "narration" | "drama" | "ad"
-    val aspectRatio: String,                // "9:16" | "16:9" | "1:1"
+    val sourceKind: String,
+    val contentMode: String,
+    val aspectRatio: String,
     val styleTemplateId: String?,
-    val videoBackend: String?,              // 默认视频供应商
-    val imageBackend: String?,              // 默认图片供应商
-    val textBackend: String?,               // 默认文本供应商
-    val state: String,                      // "draft" | "scripting" | "generating" | "complete"
+    val videoBackend: String?,
+    val imageBackend: String?,
+    val textBackend: String?,
+    val state: String,
+    val targetDuration: Int?,
+    val brief: String?,
+    val sourceFilePath: String?,
     val createdAt: Long,
     val updatedAt: Long
 )
 ```
 
-### 4.2 剧本（Script）
+### 5.2 剧本（Script）— 外键约束
 
 ```kotlin
-@Entity(tableName = "scripts")
+@Entity(
+    tableName = "arcreel_scripts",
+    foreignKeys = [ForeignKey(
+        entity = ProjectEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["projectId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("projectId")]
+)
 data class ScriptEntity(
-    @PrimaryKey val id: String,             // "episode_01"
-    val projectName: String,                // FK → projects
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val projectId: Long,
     val title: String,
-    val segments: String,                   // JSON: List<Segment>
-    val characters: String,                 // JSON: List<Character>
-    val props: String,                      // JSON: List<Prop>
-    val generationMode: String?,            // "v1" | "v2" | "ad"
+    val generationMode: String?,
     val durationSeconds: Int?,
     val createdAt: Long,
     val updatedAt: Long
 )
 ```
 
-### 4.3 分镜/镜头（Segment → Shot）
-
-剧本分段结构（JSON 嵌入）：
+### 5.3 段（Segment）— 独立表
 
 ```kotlin
-data class Segment(
-    val id: String,
-    val sceneDescription: String,
-    val shots: List<Shot>,
-    val narration: NarrationSegment?,
-    val dialogues: List<Dialogue>
+@Entity(
+    tableName = "arcreel_segments",
+    foreignKeys = [ForeignKey(
+        entity = ScriptEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["scriptId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("scriptId")]
 )
-
-data class Shot(
-    val id: String,
-    val shotType: ShotType,          // Close-up, Medium Shot, etc.
-    val cameraMotion: CameraMotion,
-    val transition: TransitionType,
-    val imagePrompt: ImagePrompt,
-    val videoPrompt: VideoPrompt?,
-    val imageAssetId: String?,       // 生成后回填
-    val videoAssetId: String?,
-    val ttsAssetId: String?
+data class SegmentEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val scriptId: Long,
+    val segmentOrder: Int,
+    val sceneDescription: String,
+    val narrationText: String?,
+    val narrationVoice: String?,
+    val dialogues: String               // JSON 数组（对话量小，可接受）
 )
 ```
 
-### 4.4 生成任务（Task）
+### 5.4 镜头（Shot）— 独立表，可独立更新状态
 
 ```kotlin
-@Entity(tableName = "generation_tasks")
+@Entity(
+    tableName = "arcreel_shots",
+    foreignKeys = [ForeignKey(
+        entity = SegmentEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["segmentId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("segmentId"), Index("projectId")]
+)
+data class ShotEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val projectId: Long,
+    val segmentId: Long,
+    val shotOrder: Int,
+    val shotType: String,
+    val cameraMotion: String,
+    val transition: String,
+    val imagePromptPositive: String,
+    val imagePromptNegative: String,
+    val videoPromptPositive: String?,
+    val videoDurationSeconds: Int?,
+    // 生成状态：nullable → pending → assetId → 完成
+    val imageStatus: String = "pending",
+    val imageAssetId: String? = null,
+    val videoStatus: String = "pending",
+    val videoAssetId: String? = null,
+    val ttsStatus: String = "pending",
+    val ttsAssetId: String? = null
+)
+```
+
+### 5.5 生成任务（Task）— 新增 remoteTaskId
+
+```kotlin
+@Entity(
+    tableName = "arcreel_tasks",
+    foreignKeys = [ForeignKey(
+        entity = ProjectEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["projectId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("projectId"), Index("shotId")]
+)
 data class TaskEntity(
-    @PrimaryKey val id: String,
-    val projectName: String,
-    val scriptFile: String,
-    val segmentId: String?,
-    val shotId: String?,
-    val type: String,                      // "image" | "video" | "tts" | "text"
-    val provider: String,
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val projectId: Long,
+    val shotId: Long? = null,
+    val type: String,                   // "image" | "video" | "tts" | "text"
+    val provider: String?,
     val model: String?,
-    val status: String,                    // "pending" | "running" | "done" | "failed" | "cancelled"
+    val remoteTaskId: String?,          // 供应商返回的异步任务 ID（用于轮询）
+    val status: String = "pending",
     val inputPrompt: String?,
     val outputAssetId: String?,
     val errorMessage: String?,
-    val retryCount: Int,
+    val retryCount: Int = 0,
     val cost: Double?,
     val createdAt: Long,
     val startedAt: Long?,
@@ -261,232 +360,343 @@ data class TaskEntity(
 
 ---
 
-## 五、编排引擎（Orchestrator）
+## 六、Provider 异步接口（修复后）
 
-### 5.1 核心设计
-
-`Orchestrator` 是一个 Kotlin 协程驱动的流水线引擎，执行 9 个步骤，全程通过 `StateFlow` 推送进度：
-
-```kotlin
-class Orchestrator(
-    private val textGenerator: TextGenerator,
-    private val imageGenerator: ImageGenerator,
-    private val videoGenerator: VideoGenerator,
-    private val ttsGenerator: TtsGenerator,
-    private val taskQueue: TaskQueue
-) {
-    // 进度状态
-    data class PipelineProgress(
-        val currentStep: PipelineStep,
-        val stepIndex: Int,
-        val totalSteps: Int,
-        val stepProgress: Float,    // 0.0 - 1.0
-        val message: String,
-        val isComplete: Boolean,
-        val error: String?
-    )
-
-    private val _progress = MutableStateFlow(PipelineProgress(...))
-    val progress: StateFlow<PipelineProgress> = _progress.asStateFlow()
-
-    suspend fun execute(projectName: String, sourceFile: Uri? = null) {
-        // 串行执行各步骤，每步内部可并行
-        val steps = listOf(
-            ParseSourceStep(),
-            ExtractCharactersStep(),
-            GenerateScriptStep(),
-            ReviewScriptStep(),      // 可选的人机交互点
-            PlanStoryboardStep(),
-            GenerateImagesStep(),    // 内部并行
-            GenerateVideosStep(),    // 内部并行
-            GenerateTtsStep(),
-            ComposeVideoStep()
-        )
-        // 执行逻辑...
-    }
-}
-```
-
-### 5.2 各步骤职责
-
-| 步骤 | 输入 | 处理 | 输出 |
-|---|---|---|---|
-| 1. 解析源文件 | TXT/EPUB 文件 | 提取章节文本 | 纯文本章节 |
-| 2. 全局角色提取 | 全部章节文本 | Text API → 结构化角色列表 | Character[] |
-| 3. 剧本生成 | 章节文本 + 角色 | Text API → 剧本（分镜描述） | Script (Segments) |
-| 4. 剧本审阅 | 完整剧本 | 用户审阅/编辑 | 确认后的 Script |
-| 5. 分镜规划 | 确认后的 Script | Text API → 细化分镜 | Shot[] + Prompt |
-| 6. 图片生成 | Shot[] 的 imagePrompt | Image API 并行调用 | 图片文件 |
-| 7. 视频生成 | Shot[] 的 videoPrompt | Video API 并行调用 | 视频文件 |
-| 8. TTS 配音 | narration 文本 | TTS API 并行调用 | 音频文件 |
-| 9. 视频合成 | 视频 + 音频 | mobile-ffmpeg 合成 | 最终 MP4 |
-
-### 5.3 任务队列
-
-```kotlin
-class TaskQueue(
-    private val maxConcurrent: Int = 3,
-    private val rateLimiter: RateLimiter
-) {
-    // 多通道并发：Image/Video/Audio 各独立通道
-    private val imageChannel = Channel<ImageTask>(Channel.UNLIMITED)
-    private val videoChannel = Channel<VideoTask>(Channel.UNLIMITED)
-    private val audioChannel = Channel<AudioTask>(Channel.UNLIMITED)
-
-    // 断点续传：检查已完成的 task，跳过重试
-    fun resume(projectName: String): Flow<TaskProgress>
-
-    // 取消：取消所有 pending + running 任务
-    fun cancelAll()
-}
-```
-
----
-
-## 六、AI 供应商集成
-
-### 6.1 统一接口
+### 6.1 统一接口（拆分 submit/poll/download）
 
 ```kotlin
 interface ProviderApi {
-    suspend fun generateText(prompt: String, model: String): String
-    suspend fun generateImage(prompt: String, config: ImageConfig): ByteArray
-    suspend fun generateVideo(prompt: String, config: VideoConfig): ByteArray
-    suspend fun generateTts(text: String, config: TtsConfig): ByteArray
+    val providerName: String
+
+    // 文本生成（同步，通常 < 30s）
+    suspend fun generateText(prompt: String, model: String?): Result<String>
+
+    // 图片生成（异步）
+    suspend fun submitImageTask(prompt: String, negativePrompt: String?, config: ImageConfig): Result<String>
+    suspend fun pollImageTask(taskId: String): Result<PollResult>
+    suspend fun downloadImage(taskId: String): Result<java.io.File>
+
+    // 视频生成（异步，耗时 30s~5min）
+    suspend fun submitVideoTask(prompt: String, negativePrompt: String?, config: VideoConfig): Result<String>
+    suspend fun pollVideoTask(taskId: String): Result<PollResult>
+    suspend fun downloadVideo(taskId: String): Result<java.io.File>
+
+    // TTS（异步或同步）
+    suspend fun generateTts(text: String, config: TtsConfig): Result<java.io.File>
+
     suspend fun validateCredentials(): Boolean
+}
+
+sealed class PollResult {
+    data class Processing(val progress: Int, val estimatedSeconds: Int? = null) : PollResult()
+    data class Completed(val fileUrl: String, val fileSize: Long? = null) : PollResult()
+    data class Failed(val error: String) : PollResult()
 }
 ```
 
 ### 6.2 供应商列表
 
-| 供应商 | 文本 | 图片 | 视频 | TTS |
-|---|---|---|---|---|
-| Gemini | ✅ | ✅ | ✅ (Veo) | ✅ |
-| 火山方舟 (Ark) | ✅ | ✅ | ✅ (Seedance) | ✅ |
-| Grok | ✅ | ✅ | ✅ | ✅ |
-| OpenAI | ✅ | ✅ | ✅ (Sora) | ✅ |
-| 阿里百炼 (DashScope) | ✅ | ✅ | ✅ | ✅ |
-| MiniMax | - | ✅ | ✅ | - |
-| 可灵 (Kling) | - | ✅ | ✅ | - |
-| Vidu | - | ✅ | ✅ | - |
-| 自定义 (Agnes/NewAPI) | ✅ | ✅ | ✅ | ✅ |
+| 供应商 | 文本 | 图片 | 视频 | TTS | 图片模式 | 视频模式 |
+|---|---|---|---|---|---|---|
+| Gemini | ✅ | ✅ | ✅ (Veo) | ✅ | 同步 | 异步 |
+| 火山方舟 (Ark) | ✅ | ✅ | ✅ (Seedance) | ✅ | 异步 | 异步 |
+| Grok | ✅ | ✅ | ✅ | ✅ | 同步 | 异步 |
+| OpenAI | ✅ | ✅ | ✅ (Sora) | ✅ | 同步 | 异步 |
+| 阿里百炼 (DashScope) | ✅ | ✅ | ✅ | ✅ | 异步 | 异步 |
+| MiniMax | - | ✅ | ✅ | - | 异步 | 异步 |
+| 可灵 (Kling) | - | ✅ | ✅ | - | 异步 | 异步 |
+| Vidu | - | ✅ | ✅ | - | 异步 | 异步 |
+| 自定义 (Agnes/NewAPI) | ✅ | ✅ | ✅ | ✅ | 配置决定 | 配置决定 |
 
-### 6.3 配置存储
-
-用 SharedPreferences 存储每个供应商的 API Key 和配置：
+### 6.3 轮询策略
 
 ```kotlin
-data class ProviderConfig(
-    val provider: String,
-    val apiKey: String,
-    val apiSecret: String?,
-    val baseUrl: String?,
-    val defaultModel: String?,
-    val isEnabled: Boolean
-)
+object PollingStrategy {
+    // 初始间隔 1s，最大 10s，指数退避
+    fun intervals(): Sequence<Long> = sequence {
+        var delay = 1000L
+        while (true) {
+            yield(delay)
+            delay = (delay * 1.5).toLong().coerceAtMost(10_000)
+        }
+    }
+}
+```
+
+### 6.4 配置存储（加密）
+
+```kotlin
+class ApiKeyStore(context: Context) {
+    private val prefs = EncryptedSharedPreferences.create(
+        "arcreel_api_keys",
+        MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
+        context,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
+
+    fun saveApiKey(provider: String, key: String, secret: String? = null)
+    fun getApiKey(provider: String): String?
+    fun getApiSecret(provider: String): String?
+    fun deleteApiKey(provider: String)
+}
 ```
 
 ---
 
-## 七、UI 导航结构
+## 七、后台任务架构（修复后）
 
-### 7.1 底部导航栏新增 Tab
+### 7.1 PipelineWorker（WorkManager）
 
+```kotlin
+@HiltWorker
+class PipelineWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted params: WorkerParameters,
+    private val executor: PipelineExecutor,
+    private val projectRepo: ProjectRepository
+) : CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        // 1. 启动前台服务
+        setForeground(createForegroundInfo())
+
+        // 2. 恢复项目上下文
+        val projectId = inputData.getLong("projectId", 0)
+        val project = projectRepo.getById(projectId) ?: return Result.failure()
+
+        // 3. 执行编排
+        return executor.execute(project, sourceText = null) { stepIndex, total, message ->
+            // 进度回调 → WorkManager Progress
+            setProgress(workDataOf(
+                "step" to stepIndex,
+                "total" to total,
+                "message" to message
+            ))
+            // 更新前台通知
+            updateForegroundNotification(message)
+        }
+    }
+}
 ```
-┌──────────────────────────────────────────────┐
-│  [书架]  [发现]  [订阅]  [我的]  [AI视频]  │
-└──────────────────────────────────────────────┘
+
+### 7.2 前台服务通知
+
+```kotlin
+fun createForegroundNotification(message: String): ForegroundInfo {
+    val channelId = "arcreel_generation"
+    val notification = NotificationCompat.Builder(context, channelId)
+        .setContentTitle("AI 视频生成中")
+        .setContentText(message)
+        .setOngoing(true)
+        .setSmallIcon(R.drawable.ic_arcreel)
+        .addAction(R.drawable.ic_cancel, "取消", cancelPendingIntent)
+        .build()
+
+    return ForegroundInfo(NOTIFICATION_ID, notification)
+}
 ```
 
-点击 `AI视频` Tab 进入 Arcreel 独立导航图：
+### 7.3 进度同步（UI 层 → WorkInfo）
 
+```kotlin
+@HiltViewModel
+class GenerationViewModel @Inject constructor(
+    private val workManager: WorkManager
+) : ViewModel() {
+
+    fun observeProgress(workId: UUID): Flow<PipelineProgress> {
+        return workManager.getWorkInfoByIdLiveData(workId).asFlow()
+            .mapNotNull { info ->
+                val progress = info.progress.getInt("step", 0)
+                val total = info.progress.getInt("total", 0)
+                val message = info.progress.getString("message") ?: ""
+                PipelineProgress(
+                    stepIndex = progress,
+                    totalSteps = total,
+                    message = message,
+                    isComplete = info.state == WorkInfo.State.SUCCEEDED,
+                    isFailed = info.state == WorkInfo.State.FAILED
+                )
+            }
+    }
+}
 ```
-AI视频 Tab
-├── 项目列表 (ProjectListScreen)          ← 入口
-├── 创建项目 (CreateProjectScreen)
-│   ├── 选择源文件（从书架/本地）
-│   ├── 选择风格模板
-│   ├── 设置画幅比 / 供应商
-│   └── 点击"开始生成" → 进入生成流程
-├── 项目详情 (MainProjectScreen)
-│   ├── Tab: 剧本 → ScriptScreen → ScriptEditScreen
-│   ├── Tab: 分镜 → StoryboardScreen → StoryboardDetailScreen
-│   ├── Tab: 角色 → CharacterListScreen → CharacterDetailScreen
-│   ├── Tab: 素材 → AssetLibraryScreen
-│   ├── Tab: 参考 → ReferenceVideoScreen
-│   └── Tab: 生成 → GenerationScreen (进度)
-├── 项目设置 (ProjectSettingsScreen)
-├── AI 助手 (AssistantScreen)               ← 全局浮窗
-├── 全局设置 (GlobalSettingsScreen)
-│   ├── 供应商配置 (ProviderConfigScreen)
-│   └── 全局偏好
-└── 导出 (ExportScreen)
-```
-
-### 7.2 关键交互
-
-- **一键生成**：项目创建后点击"开始生成"，进入 `GenerationScreen`，展示逐步进度，全程无需手动。
-- **剧本审阅**：第 4 步暂停，用户可查看/编辑剧本，确认后继续。
-- **生成进度**：实时显示当前步骤、已完成/总数、预计剩余时间。
-- **断点续传**：退出后重进可恢复。
 
 ---
 
-## 八、与 Legado 的集成点
+## 八、PipelineUseCase 接口（domain 层）
 
-### 8.1 底部导航
+```kotlin
+// domain/domain/usecase/PipelineUseCase.kt
+// 纯业务接口，不依赖 Android
 
-在 `MainActivity` 中新增第 5 个 Tab（`idArcreel = 4`），使用 `ArcreelEntry` Composable 作为内容。
+interface PipelineUseCase {
+    suspend fun execute(
+        project: Project,
+        sourceText: String? = null,
+        onProgress: suspend (stepIndex: Int, totalSteps: Int, message: String) -> Unit
+    ): PipelineResult
+}
 
-### 8.2 书架集成
-
-- 从书架选择小说 → 直接导入到 Arcreel 项目
-- 通过 Legado 的 `Book` 实体获取封面、书名、章节内容
-
-### 8.3 依赖注入
-
-Arcreel 模块使用 Hilt，Legado 原有代码不做改动。Arcreel 的 Hilt 组件通过 `@Module` 声明，在 `ArcreelEntry` Composable 中提供。
-
-### 8.4 包体积
-
-新增依赖预估：
-- Jetpack Compose + Material 3: ~4 MB
-- Retrofit + OkHttp: ~1 MB
-- mobile-ffmpeg: ~15 MB
-- Room 已在现有依赖中
-- **总计新增约 20 MB**
+sealed class PipelineResult {
+    data class Success(val project: Project) : PipelineResult()
+    data class Failure(val step: String, val error: String) : PipelineResult()
+}
+```
 
 ---
 
-## 九、实现优先级
+## 九、错误处理与重试策略
 
-### Phase 1：基础框架（v0.1）
-- arcreel 模块搭建 + Gradle 配置
-- Room 数据库 + DAO
-- 底部导航集成
-- 项目列表 + 创建项目 UI
+### 9.1 步骤级错误处理
 
-### Phase 2：核心流水线（v0.2）
-- 编排引擎 + 9 步骤
+| 场景 | 策略 |
+|---|---|
+| 网络超时 | 自动重试 3 次，指数退避 (1s → 3s → 9s) |
+| API 限流 (429) | 读取 Retry-After 头，等待后重试 |
+| 供应商 5xx 错误 | 重试 2 次，仍失败则跳过该 Shot |
+| 图片生成失败 | 跳过该 Shot，继续下一个，最终统计失败数 |
+| 视频生成失败 | 跳过该 Shot，继续下一个 |
+| 单个 Shot 失败超过阈值 | 若 > 30% Shot 失败，中止整个流水线 |
+| WorkManager 被系统杀死 | 自动重试（WorkManager 内置） |
+
+### 9.2 断点续传
+
+- 每个 Shot 的 `imageStatus` / `videoStatus` / `ttsStatus` 独立持久化
+- 重启 Worker 时，加载 Shot 表，跳过 status="done" 的 Shot
+- `RateLimiter` 使用 `Semaphore` 控制并发数，适配不同供应商的 TPM 限制
+
+---
+
+## 十、存储与内存管理
+
+| 方面 | 方案 |
+|---|---|
+| 临时文件 | `getExternalFilesDir("arcreel/temp")`，合成后自动清理 |
+| 最终输出 | `getExternalFilesDir("arcreel/output")`，用户可导出到相册 |
+| 缓存清理 | 每次启动时清理超过 7 天的临时文件 |
+| 存储空间不足 | `StorageManager` 预检查，不足时提示用户 |
+| 大文件加载 | 不使用 `ByteArray`，始终使用 `File` 路径传递给 Glide/MediaPlayer |
+
+---
+
+## 十一、权限清单
+
+```xml
+<!-- 网络 -->
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+<!-- 前台服务（Android 14+ 需要指定类型） -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+<!-- 通知 -->
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<!-- 存储（Android 10+ 使用 Scoped Storage，无需此权限） -->
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="28" />
+```
+
+---
+
+## 十二、网络安全配置
+
+```xml
+<!-- res/xml/network_security_config.xml -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <!-- 各供应商域名 -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">openai.com</domain>
+        <domain includeSubdomains="true">volces.com</domain>
+        <domain includeSubdomains="true">aliyuncs.com</domain>
+        <domain includeSubdomains="true">klingai.com</domain>
+        <domain includeSubdomains="true">vidu.com</domain>
+        <domain includeSubdomains="true">minimax.chat</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
+```
+
+---
+
+## 十三、成本预估弹窗
+
+在 Step 6（图片生成）执行前，必须弹出成本预估：
+
+```
+┌──────────────────────────────────┐
+│  成本预估                        │
+│                                  │
+│  图片生成: 24 个 Shot × ¥0.05    │
+│  = ¥1.20                         │
+│  视频生成: 24 个 Shot × ¥0.30    │
+│  = ¥7.20                         │
+│  TTS 配音: 12 段 × ¥0.02         │
+│  = ¥0.24                         │
+│  ─────────────────────           │
+│  预估总计: ¥8.64                 │
+│                                  │
+│  [取消]  [确认生成]              │
+└──────────────────────────────────┘
+```
+
+计算逻辑：`总 Shot 数 × 供应商单价`，单价从配置读取。
+
+---
+
+## 十四、包体积
+
+| 依赖 | 体积 |
+|---|---|
+| Jetpack Compose + Material 3 | ~4 MB |
+| Retrofit + OkHttp + Gson | ~1 MB |
+| ffmpeg-kit-min | ~5 MB |
+| WorkManager + Hilt | ~1.5 MB |
+| Room 已在现有中 | — |
+| **总计新增** | **~11.5 MB** |
+
+---
+
+## 十五、实现优先级（重排后）
+
+### Phase 0：技术预研
+- 验证 Kling/Vidu 异步提交 + 轮询 API
+- 验证 ffmpeg-kit-min 合成 3 秒视频
+- 验证 WorkManager + Foreground Service 后台存活
+- 验证 EncryptedSharedPreferences 存储
+
+### Phase 1：数据层 + 后台管道
+- 数据库（Shot 独立表 + 自增主键 + ForeignKey）
+- WorkManager 管道 + PipelineWorker
+- EncryptedSharedPreferences API Key 存储
+- 网络层 + 1 个供应商完整调通
+
+### Phase 2：编排引擎
+- PipelineExecutor + 9 步骤
+- 异步轮询框架
+- 断点续传 + RateLimiter (Semaphore)
 - 文件解析（TXT/EPUB）
-- 文本生成接口（1 个供应商）
-- 剧本生成 + 审阅 UI
 
-### Phase 3：多媒体生成（v0.3）
-- 图片生成接口（3 个供应商）
-- 视频生成接口（3 个供应商）
-- TTS 生成接口
-- 分镜预览 + 生成进度 UI
+### Phase 3：UI 层
+- Compose 界面（项目列表/创建/详情）
+- 成本预估弹窗
+- 生成进度（WorkInfo 订阅）
+- 剧本编辑/审阅
 
-### Phase 4：扩展功能（v0.4）
+### Phase 4：扩展
 - 全供应商支持
-- 角色/道具/线索管理
-- 参考视频
-- 素材库
+- 角色/道具/参考视频
 - AI 助手
-
-### Phase 5：完善（v1.0）
 - 视频合成 + 导出
-- 断点续传 + 速率限制
-- 全局配置
-- 测试 + 优化
+- 测试 + ProGuard 规则
