@@ -227,7 +227,7 @@ class ReadChapterContextTool(
     override suspend fun execute(arguments: Map<String, Any?>): AiToolResult = runCatching {
         val idx = (arguments["chapterIndex"] as? Number)?.toInt() ?: chapterIndex
         val maxChars = (arguments["maxChars"] as? Number)?.toInt() ?: 4000
-        val chapter = appDb.bookChapterDao.get(bookUrl, idx)
+        val chapter = appDb.bookChapterDao.getChapter(bookUrl, idx)
             ?: return AiToolResult("chapter not found (bookUrl=$bookUrl, idx=$idx)", isError = true)
         val text = chapter.content.take(maxChars)
         AiToolResult("title=${chapter.title}\n\n$text")
@@ -242,14 +242,14 @@ private fun AiReadingAssistantScreen(
     chapterIndex: Int,
     selectedText: String,
     onDismiss: () -> Unit,
-    vm: ReadingAssistantViewModel = viewModel(
-        factory = androidx.lifecycle.viewmodel.initializer {
-            androidx.lifecycle.viewmodel.MutableCreationExtras().let {
-                ReadingAssistantViewModel(bookUrl, bookName, chapterIndex, selectedText)
-            }
+) {
+    val vm: ReadingAssistantViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T =
+                ReadingAssistantViewModel(bookUrl, bookName, chapterIndex, selectedText) as T
         }
     )
-) {
     val state by vm.state.collectAsState()
     var input by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
