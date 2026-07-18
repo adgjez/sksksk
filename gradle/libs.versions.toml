@@ -11,7 +11,7 @@ flexbox = "3.0.0"
 fragment = "1.8.9"
 documentfile = "1.1.0"
 
-composeBom = "2025.04.01"
+composeBom = "2026.06.01"
 
 libarchive = "1.1.6"
 lyricViewx = "1.3.2"
