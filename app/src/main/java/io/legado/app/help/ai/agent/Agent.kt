@@ -6,13 +6,13 @@ import io.legado.app.help.ai.AiService
 import io.legado.app.help.ai.ChatResult
 import io.legado.app.help.ai.OpenAiService
 import io.legado.app.help.ai.memory.AiMemoryStore
+import io.legado.app.help.ai.skill.Skill
+import io.legado.app.help.ai.skill.SkillRegistry
 import io.legado.app.help.ai.tool.AiTool
-import io.legado.app.help.ai.tool.AiToolCall
 import io.legado.app.help.ai.tool.ReadMemoryTool
 import io.legado.app.help.ai.tool.WriteMemoryTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.util.UUID
 
 /**
@@ -26,6 +26,7 @@ import java.util.UUID
 class Agent(
     private val service: AiService = OpenAiService(),
     private val memory: AiMemoryStore = AiMemoryStore.instance,
+    private val skills: SkillRegistry = SkillRegistry.instance,
     private val maxSteps: Int = 5,
 ) {
 
@@ -37,20 +38,20 @@ class Agent(
         extraTools: List<AiTool> = emptyList(),
     ): Result<AgentResult> = withContext(Dispatchers.IO) {
         runCatching {
-            // 默认带 memory 工具
+            // 默认带 memory 工具 + skill 工具（让 agent 自我进化）
             val tools = extraTools + listOf(
                 ReadMemoryTool(memory),
                 WriteMemoryTool(memory),
+                ListSkillsTool(skills),
+                ActivateSkillTool(skills),
             )
-            // 把 memory 内容注入 system prompt
-            val bookKey = history.firstOrNull { it.content.contains("bookKey") }?.id ?: ""
-            val memorySection = memory.forPrompt(bookKey = "")
+            // 把 memory 内容 + 当前激活 skills 拼到 system prompt
+            val memorySection = memory.forPrompt()
+            val skillsSection = skills.activeInstructions()
             val fullSystem = buildString {
                 append(systemPrompt)
-                if (memorySection.isNotBlank()) {
-                    append("\n\n")
-                    append(memorySection)
-                }
+                if (memorySection.isNotBlank()) { append("\n\n"); append(memorySection) }
+                if (skillsSection.isNotBlank()) { append("\n\n"); append(skillsSection) }
             }
 
             val working = history.toMutableList()
@@ -69,7 +70,6 @@ class Agent(
                         totalCompletionTokens = lastUsage.completionTokens,
                     )
                 }
-                // 把 assistant 的 tool_calls 消息加回
                 val assistantMsg = AiMessage(
                     id = UUID.randomUUID().toString(),
                     conversationId = working.lastOrNull()?.conversationId.orEmpty(),
@@ -77,7 +77,6 @@ class Agent(
                     content = result.content,
                 )
                 working.add(assistantMsg)
-                // 执行每个 tool_call
                 for (call in result.toolCalls) {
                     val tool = tools.firstOrNull { it.name == call.name }
                     val toolResult = if (tool == null) {
@@ -91,11 +90,9 @@ class Agent(
                         }
                     }
                     toolLog.add(ToolCallLog(call = call, result = toolResult))
-                    // OpenAI 协议：把 tool 结果作为 role=tool 的消息
                     working.add(toolResult.toMessage(call.id, working.last().conversationId))
                 }
             }
-            // 超过步数：把最后一轮 content 返回
             AgentResult(
                 finalText = lastUsage.content.ifBlank { "[agent stopped at maxSteps=$maxSteps]" },
                 steps = maxSteps,
@@ -104,6 +101,38 @@ class Agent(
                 totalCompletionTokens = lastUsage.completionTokens,
             )
         }
+    }
+}
+
+/** 让 agent 看自己激活了哪些 skill 的工具。 */
+class ListSkillsTool(
+    private val skills: SkillRegistry,
+) : AiTool {
+    override val name = "list_skills"
+    override val description = "查看所有可用 skill 及其说明（不需参数）。"
+    override val parametersSchema = """{"type":"object","properties":{}}"""
+    override suspend fun execute(arguments: Map<String, Any?>) = runCatching {
+        io.legado.app.help.ai.tool.AiToolResult(
+            skills.all().joinToString("\n") { "- ${it.name}: ${it.description}" }
+        )
+    }.getOrElse { io.legado.app.help.ai.tool.AiToolResult("error: ${it.message}", isError = true) }
+}
+
+/** 激活 skill：写 memory，之后会被自动注入到 system prompt。 */
+class ActivateSkillTool(
+    private val skills: SkillRegistry,
+) : AiTool {
+    override val name = "activate_skill"
+    override val description = "激活一个 skill。下次 agent 启动会自动按 skill 的指令行事。"
+    override val parametersSchema = """
+        {"type":"object","properties":{"name":{"type":"string","description":"skill 名称"}}, "required":["name"]}
+    """.trimIndent()
+    override suspend fun execute(arguments: Map<String, Any?>): io.legado.app.help.ai.tool.AiToolResult {
+        val name = arguments["name"]?.toString()
+            ?: return io.legado.app.help.ai.tool.AiToolResult("missing 'name'", isError = true)
+        val s = skills.byName(name) ?: return io.legado.app.help.ai.tool.AiToolResult("unknown skill: $name", isError = true)
+        skills.activate(s.name)
+        return io.legado.app.help.ai.tool.AiToolResult("activated: ${s.name}")
     }
 }
 
@@ -116,7 +145,7 @@ data class AgentResult(
 )
 
 data class ToolCallLog(
-    val call: AiToolCall,
+    val call: io.legado.app.help.ai.tool.AiToolCall,
     val result: AiToolCallResult,
 )
 
