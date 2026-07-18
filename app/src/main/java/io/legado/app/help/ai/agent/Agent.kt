@@ -92,7 +92,7 @@ class Agent(
                     }
                     toolLog.add(ToolCallLog(call = call, result = toolResult))
                     // OpenAI 协议：把 tool 结果作为 role=tool 的消息
-                    working.add(toolResult.toMessage(working.last().conversationId))
+                    working.add(toolResult.toMessage(call.id, working.last().conversationId))
                 }
             }
             // 超过步数：把最后一轮 content 返回
@@ -125,20 +125,10 @@ data class AiToolCallResult(
     val content: String,
     val isError: Boolean,
 ) {
-    fun toMessage(conversationId: String): AiMessage {
-        val argsJson = JSONObject(callArguments).toString()
-        return AiMessage(
-            id = UUID.randomUUID().toString(),
-            conversationId = conversationId,
-            role = "tool",
-            content = if (isError) "[error] $content" else content,
-        )
-    }
-    // AiToolCall 没有暴露 arguments，这里通过 reflection 拿（仅 build message 用）
-    private val callArguments: Map<String, Any?> get() = runCatching {
-        val f = AiToolCall::class.java.getDeclaredField("arguments")
-        f.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        f.get(call) as Map<String, Any?>
-    }.getOrElse { emptyMap() }
+    fun toMessage(callId: String, conversationId: String): AiMessage = AiMessage(
+        id = UUID.randomUUID().toString(),
+        conversationId = conversationId,
+        role = "tool",
+        content = if (isError) "[error] $content" else content,
+    )
 }
