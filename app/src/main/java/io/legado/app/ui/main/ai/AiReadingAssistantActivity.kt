@@ -229,7 +229,15 @@ class ReadChapterContextTool(
         val maxChars = (arguments["maxChars"] as? Number)?.toInt() ?: 4000
         val chapter = appDb.bookChapterDao.getChapter(bookUrl, idx)
             ?: return AiToolResult("chapter not found (bookUrl=$bookUrl, idx=$idx)", isError = true)
-        val text = chapter.content.take(maxChars)
+        val book = appDb.bookDao.getBook(bookUrl)
+            ?: return AiToolResult("book not found (bookUrl=$bookUrl)", isError = true)
+        // BookHelp.getContent 从本地缓存读章节正文（无网/首次打开会 null）
+        val text = io.legado.app.help.book.BookHelp.getContent(book, chapter)?.take(maxChars)
+            ?: return AiToolResult(
+                "content not in local cache yet (bookUrl=$bookUrl, idx=$idx). " +
+                "Please open the chapter in reader first to cache it.",
+                isError = true
+            )
         AiToolResult("title=${chapter.title}\n\n$text")
     }.getOrElse { AiToolResult("error: ${it.message}", isError = true) }
 }
