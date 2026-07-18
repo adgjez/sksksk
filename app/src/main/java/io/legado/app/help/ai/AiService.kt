@@ -2,11 +2,16 @@ package io.legado.app.help.ai
 
 import io.legado.app.data.entities.AiMessage
 import io.legado.app.data.entities.AiProvider
+import io.legado.app.help.ai.tool.AiTool
+import io.legado.app.help.ai.tool.AiToolCall
+import io.legado.app.help.ai.tool.AiToolResult
 
 data class ChatResult(
     val content: String,
     val promptTokens: Int = 0,
     val completionTokens: Int = 0,
+    /** 模型决定要调的若干工具调用（一个 message 可能含多个）。 */
+    val toolCalls: List<AiToolCall> = emptyList(),
 )
 
 /** SSE 流式回调。 */
@@ -18,21 +23,33 @@ fun interface ChatStream {
 
 interface AiService {
     suspend fun testConnection(provider: AiProvider): Result<Unit>
+
+    /**
+     * 单次 chat。
+     * @param tools 模型可以调用的工具列表（可空）
+     */
     suspend fun chat(
         provider: AiProvider,
         systemPrompt: String,
         messages: List<AiMessage>,
+        tools: List<AiTool> = emptyList(),
         temperature: Double = 0.7,
         maxTokens: Int = 2048
     ): Result<ChatResult>
+
+    /**
+     * 流式 chat。tool 出现时整段 tool_call 一次性 emit（流式对 tool 意义不大）。
+     */
     suspend fun chatStream(
         provider: AiProvider,
         systemPrompt: String,
         messages: List<AiMessage>,
+        tools: List<AiTool> = emptyList(),
         stream: ChatStream,
         temperature: Double = 0.7,
         maxTokens: Int = 2048
     )
+
     suspend fun generateImage(
         provider: AiProvider,
         prompt: String,
