@@ -21,11 +21,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -171,29 +169,20 @@ private fun ProviderEditDialog(
     var apiKey by remember { mutableStateOf(provider.apiKey) }
     var model by remember { mutableStateOf(provider.model) }
     var type by remember { mutableStateOf(provider.type) }
-    var typeMenu by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (provider.name.isBlank()) "添加 Provider" else "编辑 Provider") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ExposedDropdownMenuBox(expanded = typeMenu, onExpandedChange = { typeMenu = it }) {
-                    OutlinedTextField(
-                        value = type, onValueChange = {}, readOnly = true,
-                        label = { Text("类型") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeMenu) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor()
-                    )
-                    androidx.compose.material3.ExposedDropdownMenu(
-                        expanded = typeMenu, onDismissRequest = { typeMenu = false }
-                    ) {
-                        listOf("openai", "ollama").forEach { t ->
-                            DropdownMenuItem(
-                                text = { Text(t) },
-                                onClick = { type = t; typeMenu = false }
-                            )
-                        }
+                Text("类型", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("openai" to "OpenAI 兼容", "ollama" to "Ollama").forEach { (key, label) ->
+                        FilterChip(
+                            selected = type == key,
+                            onClick = { type = key },
+                            label = { Text(label) }
+                        )
                     }
                 }
                 OutlinedTextField(value = name, onValueChange = { name = it },
