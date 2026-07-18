@@ -109,8 +109,8 @@ class OpenAiService : AiService {
             val allChunks = StringBuilder()
             EventSources.createFactory(okHttpClient)
                 .newEventSource(request, object : EventSourceListener() {
-                    override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
-                        if (data == "[DONE]") return
+                    override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String?) {
+                        if (data == null || data == "[DONE]") return
                         allChunks.append(data).append("\n")
                         runCatching {
                             val obj = JSONObject(data)
@@ -256,7 +256,7 @@ class OpenAiService : AiService {
 
     private fun parseToolCallsFromChunks(chunks: String): List<AiToolCall> {
         // 找最后一个含 tool_calls 的 chunk
-        for (line in chunks.lineSequence().reversed()) {
+        for (line in chunks.lines().asReversed()) {
             val data = line.trim()
             if (!data.startsWith("{")) continue
             runCatching {

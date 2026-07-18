@@ -81,7 +81,7 @@ class AiRepository(private val service: AiService = OpenAiService()) {
         )
         saveMessage(userMsg)
         val history = messagesOf(conversationId)
-        service.chatStream(provider, systemPrompt, history, stream)
+        service.chatStream(provider, systemPrompt, history, tools = emptyList(), stream = stream)
     }
 
     suspend fun generateImage(
