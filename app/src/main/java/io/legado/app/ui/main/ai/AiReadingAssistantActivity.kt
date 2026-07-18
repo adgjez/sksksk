@@ -46,8 +46,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.AiMessage
 import io.legado.app.data.entities.AiProvider
-import io.legado.app.help.ai.Agent
-import io.legado.app.help.ai.AgentResult
+import io.legado.app.help.ai.agent.Agent
+import io.legado.app.help.ai.agent.AgentResult
 import io.legado.app.help.ai.AiRepository
 import io.legado.app.help.ai.tool.AiTool
 import io.legado.app.help.ai.tool.AiToolResult
