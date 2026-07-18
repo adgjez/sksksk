@@ -109,12 +109,12 @@ class OpenAiService : AiService {
             val allChunks = StringBuilder()
             EventSources.createFactory(okHttpClient)
                 .newEventSource(request, object : EventSourceListener() {
-                    override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String?) {
-                        if (data == null || data == "[DONE]") return
+                    override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                        if (data == "[DONE]") return
                         allChunks.append(data).append("\n")
                         runCatching {
                             val obj = JSONObject(data)
-                            val delta = obj.getJSONArray("choices")
+                            val delta: String = obj.getJSONArray("choices")
                                 .optJSONObject(0)
                                 ?.optJSONObject("delta")
                                 ?.optString("content", "")
