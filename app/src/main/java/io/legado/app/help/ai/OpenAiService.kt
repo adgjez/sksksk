@@ -118,6 +118,7 @@ class OpenAiService : AiService {
                                 .optJSONObject(0)
                                 ?.optJSONObject("delta")
                                 ?.optString("content", "")
+                                ?: ""
                             if (delta.isNotEmpty()) {
                                 accumulated.append(delta)
                                 stream.onDelta(delta, isFinal = false)
