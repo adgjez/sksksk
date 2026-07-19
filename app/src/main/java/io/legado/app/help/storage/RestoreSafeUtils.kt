@@ -10,6 +10,7 @@ import io.legado.app.data.appDb
 import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.toastOnUi
+import org.xmlpull.v1.XmlPullParser
 import splitties.init.appCtx
 import java.io.File
 import java.io.FileInputStream
@@ -170,8 +171,8 @@ object RestoreSafeUtils {
                 val parser = Xml.newPullParser()
                 parser.setInput(fis, "UTF-8")
                 var eventType = parser.eventType
-                while (eventType != Xml.END_DOCUMENT) {
-                    if (eventType == Xml.START_TAG && parser.name == "string") {
+                while (eventType != XmlPullParser.END_DOCUMENT) {
+                    if (eventType == XmlPullParser.START_TAG && parser.name == "string") {
                         val key = parser.getAttributeValue(null, "name")
                         val value = parser.nextText()
                         if (key != null) {
