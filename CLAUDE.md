@@ -76,9 +76,34 @@ MVVM pattern with AndroidViewModel + ViewBinding + Coroutines.
 
 - **Coroutine helper**: `BaseViewModel.execute()` wraps `Coroutine.async()`. Use this instead of raw `viewModelScope.launch`.
 - **Event bus**: `LiveEventBus` for cross-component events. Subscribe via `observeEvent<T>(key) { ... }` in `observeLiveBus()`.
-- **Database**: Room (`AppDatabase` v96), singleton at `appDb`. DAOs in `data/`, entities in `data/entities/`. Uses KSP (not kapt).
+- **Database**: Room (`AppDatabase` v98), singleton at `appDb`. DAOs in `data/`, entities in `data/entities/`. Uses KSP (not kapt).
 - **Book source rules**: Rhino JS engine (`:modules:rhino` module) evaluates user-defined rules. The `analyzeRule` package in `model/` handles rule parsing.
 - **Singletons in model/**: `ReadBook`, `CacheBook`, `AudioPlay` manage global reading state.
+
+### Delegate Pattern (ReadBookActivity)
+
+`ReadBookActivity` (2038 lines) is being progressively refactored into delegate classes:
+
+- `KeyEventHandler` — all key/motion events (dispatch, onKeyDown/Up, mouse wheel, volume keys, debounce)
+- `ReadAloudDelegate` — TTS state machine (start/pause/resume), MiniBar callbacks, progress sync
+- Activity keeps lifecycle, content loading, and UI coordination; delegates handle their specific domains.
+
+### AI Subsystem (`help/ai/`)
+
+Agent-based AI with tool calling (OpenAI-compatible protocol):
+
+- `Agent.kt` — multi-step loop with retry (exponential backoff), timeout protection, consecutive error counting
+- `Skill.kt` / `SkillRegistry.kt` — 5 builtin skills + agent self-evolution (create → evaluate → stable/deprecated)
+- 16 tools total: `fetch_html` (enhanced: POST/charset/headers/extraction), `save_book_source`, `list_saved_book_sources`, `check_book_sources` (batch test), `read_stats` (reading statistics), `validate_book_source` (JSON structure check), plus memory/search/chapter tools
+- `OpenAiService.kt` — OpenAI-compatible API client
+- `AiMemoryStore.kt` — persistent AI memory
+- `CharacterTtsService.kt` — character-based TTS
+
+### Reading Goal System (`help/readinggoal/`)
+
+- `ReadingGoalManager` — daily reading time goals, streak tracking, reading reminders
+- Persisted in SharedPreferences (no database dependency)
+- Cross-day auto-reset, consecutive day counting, progress percentage
 
 ### Modules
 

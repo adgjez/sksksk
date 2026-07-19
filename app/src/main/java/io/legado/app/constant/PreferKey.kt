@@ -311,4 +311,19 @@ object PreferKey {
 
     /** 底部导航栏排序，逗号分隔的页面key，第一项为默认主页 */
     const val navItemOrder = "navItemOrder"
+
+    /** 阅读目标：每日阅读时长目标（分钟），0=未设置 */
+    const val dailyReadingGoalMin = "dailyReadingGoalMin"
+    /** 阅读目标：今日已读时长（分钟），每次阅读结束更新 */
+    const val todayReadingMinutes = "todayReadingMinutes"
+    /** 阅读目标：今日日期标记（用于跨日重置） */
+    const val todayReadingDate = "todayReadingDate"
+    /** 阅读目标：连续打卡天数 */
+    const val readingStreakDays = "readingStreakDays"
+    /** 阅读目标：上次阅读日期（yyyy-MM-dd） */
+    const val lastReadingDate = "lastReadingDate"
+    /** 阅读提醒：到时间提醒阅读（分钟间隔，0=关闭） */
+    const val readingReminderInterval = "readingReminderInterval"
+    /** 阅读提醒：上次提醒时间戳 */
+    const val lastReminderTime = "lastReminderTime"
 }

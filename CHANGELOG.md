@@ -1,3 +1,12 @@
+**2026/07/19**
+
+* AI 书源生成增强：fetch_html 支持 POST/编码检测/自定义 headers/内容提取模式
+* AI 工具集扩展：新增 check_book_sources(批量书源检测)、read_stats(阅读统计)、validate_book_source(书源验证)
+* AI Agent 改进：指数退避重试、工具超时保护、连续错误计数优雅退出、maxSteps 提升到 8
+* 重构 ReadBookActivity：提取 KeyEventHandler 和 ReadAloudDelegate（减少 Activity 约 630 行）
+* 新增阅读目标系统：每日阅读时长目标、连续打卡、阅读提醒间隔
+* 更新 CLAUDE.md 文档反映新架构
+
 **2022/10/02**
 
 * 更新cronet: 106.0.5249.79

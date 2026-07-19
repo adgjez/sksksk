@@ -84,7 +84,7 @@ data class Skill(
             ),
             Skill(
                 name = "generate_book_source",
-                description = "为新网站生成 Legado 兼容的 BookSource JSON。需要 fetch_html 工具抓页面分析。",
+                description = "为新网站生成 Legado 兼容的 BookSource JSON。支持多页章节分析、编码自动检测、POST 搜索。",
                 origin = ORIGIN_BUILTIN,
                 status = STATUS_EXPERIMENTAL,
                 instructions = """
@@ -113,20 +113,52 @@ data class Skill(
                     - 替换规则: `源字符串||替换后` (ruleContent.replaceRegex)
                     - 关键词替换: `$1.$2` (ruleContent.replaceRegex)
 
+                    ## fetch_html 工具增强用法
+                    - extractMode: "body" (默认, 去掉 script/style/nav/footer) / "raw" (完整 HTML) / "text" (纯文本)
+                    - method: 支持 POST (配合 body + bodyType=form/json/raw)
+                    - headers: 可传 cookie/referer 等自定义头
+                    - 自动检测 GBK/GB2312/UTF-8 编码（无需手动指定）
+                    - 返回中包含 finalUrl (重定向后) 和 setCookie 信息
+
                     ## 工作流
                     1. 用户给：网站 URL + 书源名（中文显示名）+ 搜索示例关键词
-                    2. 调 fetch_html 拉首页 + 搜索结果页
-                    3. 调 fetch_html 拉一本书的详情页 + 章节列表页 + 一章正文页
-                    4. 看 HTML 结构，识别 4 个规则的 selector
-                    5. 输出完整 JSON 对象（不要任何解释文字）
-                    6. 调 save_book_source 保存
-                    7. 告诉用户文件路径 + 怎么导入
+                    2. 调 fetch_html(extractMode="body") 拉首页，观察导航/分类结构
+                    3. 调 fetch_html 拉搜索结果页（注意 POST 搜索的网站）
+                       - GET 搜索: searchUrl = "https://xxx.com/search?q={{key}}"
+                       - POST 搜索: searchUrl = "https://xxx.com/search,{\"method\":\"POST\",\"body\":\"keyword={{key}}\"}"
+                    4. 调 fetch_html 拉一本书的详情页
+                       - 观察书名/作者/简介/封面的 HTML 结构
+                       - 注意详情页可能和目录页同一 URL，也可能 tocUrl 不同
+                    5. 调 fetch_html 拉章节列表页
+                       - 识别章节列表的 selector (最常见: .chapter-list a / #list dd a / .mulu a)
+                       - 注意分页：如果有"下一页"，需要 nextContentUrl 或在 chapterList 里处理
+                    6. 调 fetch_html(extractMode="raw") 拉一章正文
+                       - 注意正文可能在 div#content / div#content_text / .chapter-content 等
+                       - 注意广告/推荐语需要用 replaceRegex 净化
+                    7. 看 HTML 结构，识别 4 个规则的 selector
+                    8. 输出完整 JSON 对象（不要任何解释文字）
+                    9. 调 save_book_source 保存
+                    10. 告诉用户文件路径 + 怎么导入
+
+                    ## selector 识别技巧
+                    - 先用 extractMode="body" 减少干扰
+                    - 列表项: 找重复的 li/dd/a 结构，bookList 选父级，子规则选子元素
+                    - 链接: bookUrl/chapterUrl 用 @css:a@href 或 @css:a@href||{{baseUrl}} 拼绝对路径
+                    - 正文: content 规则最关键，先试 div#content, div.content, .chapter-content, #booktxt
+                    - 多页章节: 如果正文分页，设置 nextContentUrl 规则
+                    - 编码: fetch_html 已自动检测，但 searchUrl 里可以写 ,{"charset":"gbk"}
+
+                    ## 常见反爬应对
+                    - Cookie 验证: 先 fetch_html 首页拿 setCookie，后续请求带上
+                    - Referer: 在 header 字段或 fetch_html headers 里加
+                    - JS 渲染: 如果页面是 JS 动态加载，selector 无法直接抓到，在 bookSourceComment 里写明
+                    - 验证码: 在 bookSourceComment 里写明，规则可以留空
 
                     注意：
                     - 所有 selector 必须可工作（不要瞎猜）
                     - 如果网站要登录或验证码，在 bookSourceComment 里写明，规则可以留空
                     - 如果搜不到结果，扩 maxBytes 重新拉
-                    - 中文站一般用 GBK 编码，告诉用户用浏览器手动 import 时选择 GBK
+                    - 中文站一般用 GBK 编码，fetch_html 会自动检测
                 """.trimIndent()
             ),
         )
