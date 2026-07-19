@@ -37,6 +37,7 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.putPrefInt
+import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
 import java.io.File
 
@@ -45,6 +46,7 @@ import java.io.File
  *
  * 从备份 JSON 文件恢复各实体的数据库记录。
  * 每个方法都使用 runInTransaction 包裹"先删后读"操作，确保原子性。
+ * 由于 Room 的 runInTransaction 不是 suspend，suspend DAO 调用用 runBlocking 包装。
  */
 internal object RestoreData {
 
@@ -149,21 +151,20 @@ internal object RestoreData {
 
     fun restoreHomepage(path: String) {
         val file = File(path, "homepage.json")
-        if (file.exists()) {
-            val json = file.readText()
-            val obj = GSON.fromJsonObject<Map<String, JsonElement>>(json).getOrNull()
-            if (obj != null) {
-                appDb.runInTransaction {
-                    appDb.homepageModuleDao.deleteAll()
-                    (obj["modules"] as? JsonArray)?.let { array ->
-                        val modules = GSON.fromJsonArray<HomepageModule>(array.toString()).getOrNull()
-                        modules?.let { appDb.homepageModuleDao.upsertAll(it) }
-                    }
-                    appDb.homepageCustomSetDao.deleteAll()
-                    (obj["customSets"] as? JsonArray)?.let { array ->
-                        val sets = GSON.fromJsonArray<HomepageCustomSet>(array.toString()).getOrNull()
-                        sets?.forEach { set -> appDb.homepageCustomSetDao.upsert(set) }
-                    }
+        if (!file.exists()) return
+        val json = file.readText()
+        val obj = GSON.fromJsonObject<Map<String, JsonElement>>(json).getOrNull() ?: return
+        appDb.runInTransaction {
+            runBlocking {
+                appDb.homepageModuleDao.deleteAll()
+                (obj["modules"] as? JsonArray)?.let { array ->
+                    val modules = GSON.fromJsonArray<HomepageModule>(array.toString()).getOrNull()
+                    modules?.let { appDb.homepageModuleDao.upsertAll(it) }
+                }
+                appDb.homepageCustomSetDao.deleteAll()
+                (obj["customSets"] as? JsonArray)?.let { array ->
+                    val sets = GSON.fromJsonArray<HomepageCustomSet>(array.toString()).getOrNull()
+                    sets?.forEach { set -> appDb.homepageCustomSetDao.upsert(set) }
                 }
             }
         }
@@ -229,9 +230,11 @@ internal object RestoreData {
 
     fun restoreKeyboardAssists(path: String) {
         appDb.runInTransaction {
-            appDb.keyboardAssistsDao.deleteAll()
-            fileToListT<KeyboardAssist>(path, "keyboardAssists.json")?.let {
-                appDb.keyboardAssistsDao.insert(*it.toTypedArray())
+            runBlocking {
+                appDb.keyboardAssistsDao.deleteAll()
+                fileToListT<KeyboardAssist>(path, "keyboardAssists.json")?.let {
+                    appDb.keyboardAssistsDao.insert(*it.toTypedArray())
+                }
             }
         }
     }
@@ -240,42 +243,43 @@ internal object RestoreData {
 
     fun restoreReadRecords(path: String) {
         appDb.runInTransaction {
-            appDb.readRecordDao.clear()
-            appDb.readRecordDao.clearDetails()
-            appDb.readRecordDao.clearSessions()
-            val readRecords = fileToListT<ReadRecord>(path, "readRecord.json").orEmpty()
-            val readRecordDetails = fileToListT<ReadRecordDetail>(path, "readRecordDetail.json").orEmpty()
-            val readRecordSessions = fileToListT<ReadRecordSession>(path, "readRecordSession.json").orEmpty()
-            if (readRecords.isNotEmpty() || readRecordDetails.isNotEmpty() || readRecordSessions.isNotEmpty()) {
-                ReadRecordRepository(appDb.readRecordDao).apply {
-                    importRecords(readRecords, readRecordDetails, readRecordSessions)
-                    repairRecords { bookName -> appDb.bookDao.getBookByName(bookName)?.author?.trim()?.ifBlank { null } }
+            runBlocking {
+                appDb.readRecordDao.clear()
+                appDb.readRecordDao.clearDetails()
+                appDb.readRecordDao.clearSessions()
+                val readRecords = fileToListT<ReadRecord>(path, "readRecord.json").orEmpty()
+                val readRecordDetails = fileToListT<ReadRecordDetail>(path, "readRecordDetail.json").orEmpty()
+                val readRecordSessions = fileToListT<ReadRecordSession>(path, "readRecordSession.json").orEmpty()
+                if (readRecords.isNotEmpty() || readRecordDetails.isNotEmpty() || readRecordSessions.isNotEmpty()) {
+                    ReadRecordRepository(appDb.readRecordDao).apply {
+                        importRecords(readRecords, readRecordDetails, readRecordSessions)
+                        repairRecords { bookName -> appDb.bookDao.getBookByName(bookName)?.author?.trim()?.ifBlank { null } }
+                    }
+                    appCtx.putPrefInt(PreferKey.readRecordRepairVersion, ReadRecordRepository.CURRENT_REPAIR_VERSION)
                 }
-                appCtx.putPrefInt(PreferKey.readRecordRepairVersion, ReadRecordRepository.CURRENT_REPAIR_VERSION)
             }
         }
     }
 
-    /**
-     * 选择性恢复阅读记录（部分文件可能未选中）。
-     */
     fun restoreReadRecordsSelective(path: String, selectedSet: Set<String>) {
         appDb.runInTransaction {
-            appDb.readRecordDao.clear()
-            appDb.readRecordDao.clearDetails()
-            appDb.readRecordDao.clearSessions()
-            val readRecords = if ("readRecord.json" in selectedSet)
-                fileToListT<ReadRecord>(path, "readRecord.json").orEmpty() else emptyList()
-            val readRecordDetails = if ("readRecordDetail.json" in selectedSet)
-                fileToListT<ReadRecordDetail>(path, "readRecordDetail.json").orEmpty() else emptyList()
-            val readRecordSessions = if ("readRecordSession.json" in selectedSet)
-                fileToListT<ReadRecordSession>(path, "readRecordSession.json").orEmpty() else emptyList()
-            if (readRecords.isNotEmpty() || readRecordDetails.isNotEmpty() || readRecordSessions.isNotEmpty()) {
-                ReadRecordRepository(appDb.readRecordDao).apply {
-                    importRecords(readRecords, readRecordDetails, readRecordSessions)
-                    repairRecords { bookName -> appDb.bookDao.getBookByName(bookName)?.author?.trim()?.ifBlank { null } }
+            runBlocking {
+                appDb.readRecordDao.clear()
+                appDb.readRecordDao.clearDetails()
+                appDb.readRecordDao.clearSessions()
+                val readRecords = if ("readRecord.json" in selectedSet)
+                    fileToListT<ReadRecord>(path, "readRecord.json").orEmpty() else emptyList()
+                val readRecordDetails = if ("readRecordDetail.json" in selectedSet)
+                    fileToListT<ReadRecordDetail>(path, "readRecordDetail.json").orEmpty() else emptyList()
+                val readRecordSessions = if ("readRecordSession.json" in selectedSet)
+                    fileToListT<ReadRecordSession>(path, "readRecordSession.json").orEmpty() else emptyList()
+                if (readRecords.isNotEmpty() || readRecordDetails.isNotEmpty() || readRecordSessions.isNotEmpty()) {
+                    ReadRecordRepository(appDb.readRecordDao).apply {
+                        importRecords(readRecords, readRecordDetails, readRecordSessions)
+                        repairRecords { bookName -> appDb.bookDao.getBookByName(bookName)?.author?.trim()?.ifBlank { null } }
+                    }
+                    appCtx.putPrefInt(PreferKey.readRecordRepairVersion, ReadRecordRepository.CURRENT_REPAIR_VERSION)
                 }
-                appCtx.putPrefInt(PreferKey.readRecordRepairVersion, ReadRecordRepository.CURRENT_REPAIR_VERSION)
             }
         }
     }

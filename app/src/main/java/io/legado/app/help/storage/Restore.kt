@@ -197,7 +197,7 @@ object Restore {
         progress("videoConfig.xml"); restoreVideoConfig(path)
 
         // 应用配置
-        applyRestoreConfig(progress)
+        applyRestoreConfig { progress(it) }
     }
 
     // --- 选择性恢复 ---
@@ -290,7 +290,7 @@ object Restore {
         if ("videoConfig.xml" in selectedSet) { progress("videoConfig.xml"); restoreVideoConfig(path) }
 
         // 应用配置
-        applyRestoreConfig(progress)
+        applyRestoreConfig { progress(it) }
     }
 
     // --- 共享配置恢复方法 ---

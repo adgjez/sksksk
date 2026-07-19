@@ -6,6 +6,7 @@ import io.legado.app.help.config.ThemeConfig
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.externalFiles
+import io.legado.app.utils.getFile
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.putPrefString
 import splitties.init.appCtx
@@ -189,9 +190,11 @@ internal object RestoreThemeBackground {
         File(backupPath, ThemeConfig.configFileName).takeIf { it.exists() }?.runCatching {
             io.legado.app.utils.GSON.fromJsonArray<ThemeConfig.Config>(readText()).getOrThrow()
         }?.getOrNull()?.forEach { config ->
-            val bgPath = config.backgroundImgPath ?: return@forEach
-            val prefKey = if (config.isNightTheme) PreferKey.bgImageN else PreferKey.bgImage
-            restoreThemeBgFile(backupPath, bgPath, prefKey)
+            val bgPath = config.backgroundImgPath
+            if (!bgPath.isNullOrBlank()) {
+                val prefKey = if (config.isNightTheme) PreferKey.bgImageN else PreferKey.bgImage
+                restoreThemeBgFile(backupPath, bgPath, prefKey)
+            }
         }
     }
 

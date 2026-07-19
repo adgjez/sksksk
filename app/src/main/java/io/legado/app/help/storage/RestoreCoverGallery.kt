@@ -10,6 +10,7 @@ import io.legado.app.model.BookCover
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.createFolderIfNotExist
 import io.legado.app.utils.externalFiles
+import io.legado.app.utils.getFile
 import io.legado.app.utils.postEvent
 import splitties.init.appCtx
 import java.io.File
