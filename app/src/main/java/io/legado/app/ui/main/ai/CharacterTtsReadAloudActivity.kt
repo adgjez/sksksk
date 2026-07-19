@@ -42,6 +42,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.AiProvider
+import io.legado.app.help.ai.CharacterTtsPlayer
 import io.legado.app.help.ai.CharacterTtsService
 import io.legado.app.help.ai.tool.CharacterAssignment
 import io.legado.app.ui.theme.AppTheme
@@ -230,8 +231,9 @@ private fun CharacterTtsScreen(
                             }
                             androidx.compose.material3.OutlinedButton(onClick = {
                                 vm.setCurrent(a.paragraphIndex)
-                                // 调用系统 TTS（MediaPool 风格最简：直接用 TtsEngine）
-                                scope.launch { speakWithVoice(a.text, a.voice) }
+                                scope.launch {
+                                    CharacterTtsPlayer.play(listOf(a.text to a.voice))
+                                }
                             }) { Text("播放") }
                         }
                     }
@@ -242,8 +244,5 @@ private fun CharacterTtsScreen(
 }
 
 private suspend fun speakWithVoice(text: String, voice: String) {
-    // MVP：只展示，提示用户去系统设置装语音。
-    // 实际播放应使用 base 的 TtsManager 或 HttpTTS：
-    //   io.legado.app.help.tts.TtsManager.speak(text, voice)
-    // 这里留空实现，等用户后续接入 HttpTTS 即可。
+    // 已迁移到 CharacterTtsPlayer.play
 }
