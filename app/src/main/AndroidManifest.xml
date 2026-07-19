@@ -249,6 +249,12 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize|stateHidden" />
+        <!-- 阅读目标设置 -->
+        <activity
+            android:name=".ui.readinggoal.ReadingGoalActivity"
+            android:exported="false"
+            android:label="阅读目标"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- AI 阅读助手（从 ReadBookActivity 启动，传入 bookUrl/selectedText） -->
         <activity
             android:name=".ui.main.ai.AiReadingAssistantActivity"

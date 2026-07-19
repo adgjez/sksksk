@@ -48,6 +48,7 @@ import io.legado.app.help.book.removeType
 import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.readinggoal.ReadingGoalManager
 import io.legado.app.help.config.ReadTipConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.source.getSourceType
@@ -288,6 +289,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var justInitData: Boolean = false
     private var syncDialog: AlertDialog? = null
     private var needSyncReadAloudOnResume: Boolean = false
+    private var readingGoalSessionStart: Long = 0L
 
     // Read aloud delegate (extracted from this Activity to reduce file size)
     private val readAloudDelegate = ReadAloudDelegate(object : ReadAloudDelegate.Host {
@@ -402,6 +404,11 @@ class ReadBookActivity : BaseReadBookActivity(),
         if (!BaseReadAloudService.isPlay()) {
             ReadBook.markReadStart()
         }
+        readingGoalSessionStart = System.currentTimeMillis()
+        // 阅读目标进度提示
+        if (ReadingGoalManager.isGoalEnabled(this)) {
+            toastOnUi(ReadingGoalManager.getSummary(this))
+        }
         if (bookChanged) {
             bookChanged = false
             ReadBook.callBack = this
@@ -435,6 +442,14 @@ class ReadBookActivity : BaseReadBookActivity(),
         needSyncReadAloudOnResume = BaseReadAloudService.isPlay() && isCurrentBookReadAloudBook()
         if (!BaseReadAloudService.isPlay()) {
             ReadBook.upReadTime()
+        }
+        // 阅读目标计时：记录本次阅读时长
+        if (readingGoalSessionStart > 0) {
+            val minutes = ((System.currentTimeMillis() - readingGoalSessionStart) / 60000).toInt()
+            if (minutes > 0) {
+                ReadingGoalManager.recordReading(this, minutes)
+            }
+            readingGoalSessionStart = 0L
         }
         ReadBook.saveRead()
         ReadBook.cancelPreDownloadTask()

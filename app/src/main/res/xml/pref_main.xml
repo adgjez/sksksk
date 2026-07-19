@@ -46,6 +46,13 @@
         android:title="AI 助手"
         app:iconSpaceReserved="false" />
 
+    <io.legado.app.lib.prefs.Preference
+        android:icon="@drawable/ic_timer_black_24dp"
+        android:key="readingGoal"
+        android:summary="设置每日阅读目标、查看连续打卡"
+        android:title="阅读目标"
+        app:iconSpaceReserved="false" />
+
     
 
     <io.legado.app.lib.prefs.NameListPreference
