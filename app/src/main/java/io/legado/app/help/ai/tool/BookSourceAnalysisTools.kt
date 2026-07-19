@@ -102,7 +102,7 @@ class ReadStatsTool : AiTool {
     }
 
     private fun getSummary(): AiToolResult {
-        val totalBooks = appDb.bookDao.allBookCount()
+        val totalBooks = appDb.bookDao.allBookCount
         val totalSources = appDb.bookSourceDao.getAllSources().size
         val readRecordCount = appDb.readRecordDao.count
         val sessionCount = appDb.readRecordDao.getSessionsCount()

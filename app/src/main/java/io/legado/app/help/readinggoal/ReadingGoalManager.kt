@@ -117,7 +117,7 @@ object ReadingGoalManager {
 
         val newStreak = when {
             lastDate == yesterday -> currentStreak + 1  // 连续
-            lastDate.isBlank() -> 1  // 首次
+            lastDate.isNullOrBlank() -> 1  // 首次
             else -> 1  // 断了，重新计数
         }
 

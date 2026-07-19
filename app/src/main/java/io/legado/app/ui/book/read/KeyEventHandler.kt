@@ -40,7 +40,7 @@ class KeyEventHandler(
                 return true
             }
             if (!isDown && !host.canShowMenu) {
-                host.canShowMenu = true
+                host.setCanShowMenu(true)
                 return true
             }
         }

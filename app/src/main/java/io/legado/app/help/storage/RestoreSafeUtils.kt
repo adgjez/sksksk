@@ -1,12 +1,12 @@
 package io.legado.app.help.storage
 
+import android.content.Context
 import android.util.Xml
 import androidx.core.content.edit
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
-import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.toastOnUi
@@ -40,21 +40,24 @@ object RestoreSafeUtils {
      * @param insert 插入新数据的回调
      * @return true 恢复成功，false 恢复失败（文件不存在或解析错误）
      */
-    suspend inline fun <reified T> safeRestoreList(
+    suspend fun <T> safeRestoreList(
         path: String,
         fileName: String,
-        crossinline deleteAll: suspend () -> Unit,
-        crossinline insert: suspend (List<T>) -> Unit,
+        deleteAll: suspend () -> Unit,
+        insert: suspend (List<T>) -> Unit,
+        clazz: Class<T>,
     ): Boolean {
         // Step 1: 先读取和验证
-        val data = readListSafely<T>(path, fileName) ?: return false
+        val data = readListSafely(path, fileName, clazz) ?: return false
 
         // Step 2: 在事务中执行删除+插入
         return try {
-            appDb.withTransaction {
-                deleteAll()
-                if (data.isNotEmpty()) {
-                    insert(data)
+            appDb.runInTransaction {
+                kotlinx.coroutines.runBlocking {
+                    deleteAll()
+                    if (data.isNotEmpty()) {
+                        insert(data)
+                    }
                 }
             }
             LogUtils.d(TAG, "$fileName 安全恢复成功: ${data.size} 条")
@@ -70,7 +73,7 @@ object RestoreSafeUtils {
      * 安全读取 JSON 列表，不执行任何数据库操作。
      * 文件不存在或解析失败时返回 null。
      */
-    inline fun <reified T> readListSafely(path: String, fileName: String): List<T>? {
+    fun <T> readListSafely(path: String, fileName: String, clazz: Class<T>): List<T>? {
         return try {
             val file = File(path, fileName)
             if (!file.exists()) {
@@ -78,10 +81,11 @@ object RestoreSafeUtils {
                 return null
             }
             LogUtils.d(TAG, "读取 $fileName 文件大小 ${file.length()}")
-            FileInputStream(file).use {
-                GSON.fromJsonArray<T>(it).getOrThrow().also { list ->
-                    LogUtils.d(TAG, "$fileName 解析成功: ${list.size} 条")
-                }
+            FileInputStream(file).use { fis ->
+                val type = com.google.gson.reflect.TypeToken.getParameterized(
+                    List::class.java, clazz
+                ).type
+                GSON.fromJson(fis.reader(), type) as? List<T>
             }
         } catch (e: Exception) {
             AppLog.put("$fileName\n读取解析出错\n${e.localizedMessage}", e)
@@ -136,10 +140,6 @@ object RestoreSafeUtils {
         return runCatching {
             if (element.isJsonNull) "" else element.asString ?: ""
         }.getOrDefault("")
-    }
-
-    fun JsonObject.intOrZero(name: Int): Int {
-        return 0
     }
 
     fun JsonObject.intOrZero(name: String): Int {
