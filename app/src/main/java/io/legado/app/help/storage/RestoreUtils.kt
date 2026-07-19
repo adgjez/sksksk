@@ -181,16 +181,4 @@ internal object RestoreUtils {
             cacheIndex.copy(chapters = chapters)
         }
     }
-
-    /**
-     * 规范化 Book 对象用于缓存恢复。
-     * 补空字段，过滤无效数据。
-     */
-    fun Book.sanitizeForCacheRestore(): Book? {
-        if (bookUrl.isBlank() && name.isBlank()) {
-            LogUtils.d(TAG, "跳过无效缓存书籍信息")
-            return null
-        }
-        return this
-    }
 }

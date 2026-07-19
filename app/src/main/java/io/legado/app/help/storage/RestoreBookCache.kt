@@ -58,7 +58,7 @@ internal object RestoreBookCache {
                     ensureDefaultBookGroups()
                     val books = RestoreUtils.fileToListT<Book>(path, RestoreUtils.bookCacheBooksFileName)
                         .orEmpty()
-                        .mapNotNull { it.sanitizeForCacheRestore() }
+                        .filter { it.bookUrl.isNotBlank() || it.name.isNotBlank() }
 
                     if (books.isNotEmpty()) {
                         LogUtils.d(TAG, "从 bookCacheBooks.json 读取到 ${books.size} 本书")
@@ -208,7 +208,7 @@ internal object RestoreBookCache {
 
         val backupBooks = RestoreUtils.fileToListT<Book>(path, RestoreUtils.bookCacheBooksFileName)
             .orEmpty()
-            .mapNotNull { it.sanitizeForCacheRestore() }
+            .filter { it.bookUrl.isNotBlank() || it.name.isNotBlank() }
 
         LogUtils.d(TAG, "从 ${RestoreUtils.bookCacheBooksFileName} 读取到 ${backupBooks.size} 本书")
 

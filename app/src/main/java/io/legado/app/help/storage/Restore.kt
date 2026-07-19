@@ -20,9 +20,11 @@ import io.legado.app.ui.book.read.config.highlight.HighlightRuleStore
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.ACache
 import io.legado.app.utils.FileUtils
+import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.compress.ZipUtils
 import io.legado.app.utils.defaultSharedPreferences
+import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
@@ -304,7 +306,7 @@ object Restore {
 
     private fun restoreThemeConfig(path: String) {
         File(path, ThemeConfig.configFileName).takeIf { it.exists() }?.runCatching {
-            val configs = io.legado.app.utils.GSON.fromJsonArray<ThemeConfig.Config>(readText()).getOrNull()
+            val configs = GSON.fromJsonArray<ThemeConfig.Config>(readText()).getOrNull()
             FileUtils.delete(ThemeConfig.configFilePath)
             copyTo(File(ThemeConfig.configFilePath))
             ThemeConfig.replaceConfigs(configs)

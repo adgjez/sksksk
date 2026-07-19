@@ -4,8 +4,11 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.utils.FileUtils
+import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.externalFiles
+import io.legado.app.utils.fromJsonArray
+import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getFile
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.putPrefString
@@ -53,12 +56,12 @@ internal object RestoreThemeBackground {
     fun restoreReadConfigBackgrounds(path: String) {
         val bgNames = linkedSetOf<String>()
         File(path, ReadBookConfig.configFileName).takeIf { it.exists() }?.runCatching {
-            io.legado.app.utils.GSON.fromJsonArray<ReadBookConfig.Config>(readText()).getOrThrow()
+            GSON.fromJsonArray<ReadBookConfig.Config>(readText()).getOrThrow()
         }?.getOrNull()?.forEach { config ->
             collectBgNames(config, bgNames)
         }
         File(path, ReadBookConfig.shareConfigFileName).takeIf { it.exists() }?.runCatching {
-            io.legado.app.utils.GSON.fromJsonObject<ReadBookConfig.Config>(readText()).getOrThrow()
+            GSON.fromJsonObject<ReadBookConfig.Config>(readText()).getOrThrow()
         }?.getOrNull()?.let { config ->
             collectBgNames(config, bgNames)
         }
@@ -188,7 +191,7 @@ internal object RestoreThemeBackground {
             restoreThemeBgFile(backupPath, bgPath, PreferKey.bgImageN)
         }
         File(backupPath, ThemeConfig.configFileName).takeIf { it.exists() }?.runCatching {
-            io.legado.app.utils.GSON.fromJsonArray<ThemeConfig.Config>(readText()).getOrThrow()
+            GSON.fromJsonArray<ThemeConfig.Config>(readText()).getOrThrow()
         }?.getOrNull()?.forEach { config ->
             val bgPath = config.backgroundImgPath
             if (!bgPath.isNullOrBlank()) {
