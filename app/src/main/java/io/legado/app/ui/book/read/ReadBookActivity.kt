@@ -656,7 +656,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             )
 
             R.id.menu_ai_assistant -> ReadBook.book?.let { book ->
-                val selected = binding.readView.getSelectedText().orEmpty()
+                val selected = binding.readView.getSelectText().orEmpty()
                 io.legado.app.ui.main.ai.AiReadingAssistantActivity.launch(
                     this@ReadBookActivity,
                     bookUrl = book.bookUrl,
