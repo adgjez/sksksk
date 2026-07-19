@@ -176,11 +176,25 @@ private fun ProviderEditDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("类型", style = MaterialTheme.typography.labelMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("openai" to "OpenAI 兼容", "ollama" to "Ollama").forEach { (key, label) ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "openai" to "OpenAI 兼容",
+                        "ollama" to "Ollama",
+                        "anthropic" to "Claude",
+                        "gemini" to "Gemini",
+                    ).forEach { (key, label) ->
                         FilterChip(
                             selected = type == key,
-                            onClick = { type = key },
+                            onClick = {
+                                // 切类型时若 URL/Model 仍是空/默认，填入对应默认
+                                if (baseUrl.isBlank() || baseUrl == io.legado.app.data.entities.AiProvider.defaultBaseUrl(type)) {
+                                    baseUrl = io.legado.app.data.entities.AiProvider.defaultBaseUrl(key)
+                                }
+                                if (model.isBlank()) {
+                                    model = io.legado.app.data.entities.AiProvider.defaultModel(key)
+                                }
+                                type = key
+                            },
                             label = { Text(label) }
                         )
                     }

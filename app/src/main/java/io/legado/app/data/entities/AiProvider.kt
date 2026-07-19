@@ -36,7 +36,31 @@ data class AiProvider(
     val createdAt: Long = System.currentTimeMillis()
 ) {
     companion object {
+        /** OpenAI / 通义千问 / DeepSeek / 智谱 GLM / 任何 OpenAI 兼容服务。 */
         const val TYPE_OPENAI = "openai"
+        /** Ollama（本地 LLM，OpenAI 模式略有差异）。 */
         const val TYPE_OLLAMA = "ollama"
+        /** Anthropic Claude（API 路径 /v1/messages，header x-api-key，不兼容 OpenAI）。 */
+        const val TYPE_ANTHROPIC = "anthropic"
+        /** Google Gemini（API 路径 /v1beta/...，用 ?key=API_KEY，不兼容 OpenAI）。 */
+        const val TYPE_GEMINI = "gemini"
+
+        /** 该 provider 类型对应的默认 base URL（用户在 UI 可改）。 */
+        fun defaultBaseUrl(type: String): String = when (type) {
+            TYPE_OPENAI -> "https://api.openai.com/v1"
+            TYPE_OLLAMA -> "http://localhost:11434"
+            TYPE_ANTHROPIC -> "https://api.anthropic.com"
+            TYPE_GEMINI -> "https://generativelanguage.googleapis.com/v1beta"
+            else -> "https://api.openai.com/v1"
+        }
+
+        /** 该类型对应的默认 model 占位（用户可改）。 */
+        fun defaultModel(type: String): String = when (type) {
+            TYPE_OPENAI -> "gpt-4o-mini"
+            TYPE_OLLAMA -> "llama3"
+            TYPE_ANTHROPIC -> "claude-3-5-sonnet-20241022"
+            TYPE_GEMINI -> "gemini-1.5-flash"
+            else -> "gpt-4o-mini"
+        }
     }
 }

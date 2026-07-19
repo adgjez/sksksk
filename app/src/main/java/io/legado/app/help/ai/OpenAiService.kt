@@ -276,6 +276,8 @@ class OpenAiService : AiService {
         val base = provider.baseUrl.trimEnd('/')
         return when (provider.type) {
             AiProvider.TYPE_OLLAMA -> "$base/api/chat"
+            // Anthropic / Gemini 不是 OpenAI 兼容，URL 仅作占位
+            AiProvider.TYPE_ANTHROPIC, AiProvider.TYPE_GEMINI -> "$base/chat/completions"
             else -> "$base/chat/completions"
         }
     }
