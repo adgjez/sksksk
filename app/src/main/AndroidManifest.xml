@@ -255,6 +255,12 @@
             android:exported="false"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize|stateHidden" />
+        <!-- AI 角色朗读（按章节分析角色对白 + 推荐音色） -->
+        <activity
+            android:name=".ui.main.ai.CharacterTtsReadAloudActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
         <!-- 书源管理 -->
         <activity
             android:name=".ui.book.source.manage.BookSourceActivity"
