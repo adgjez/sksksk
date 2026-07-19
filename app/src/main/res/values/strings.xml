@@ -2113,4 +2113,6 @@
     <string name="skip_intro_seconds">Skip intro seconds</string>
     <string name="skip_outro_seconds">Skip outro seconds</string>
     <string name="skip_seconds_summary">Seconds: %d seconds</string>
+    <string name="ai_ask_about_book">问 AI</string>
+    <string name="ai_character_tts">AI 角色朗读</string>
 </resources>

@@ -655,6 +655,24 @@ class ReadBookActivity : BaseReadBookActivity(),
                 TxtTocRuleDialog(ReadBook.book?.tocUrl)
             )
 
+            R.id.menu_ai_assistant -> ReadBook.book?.let { book ->
+                val selected = binding.readView.getSelectedText().orEmpty()
+                io.legado.app.ui.main.ai.AiReadingAssistantActivity.launch(
+                    this@ReadBookActivity,
+                    bookUrl = book.bookUrl,
+                    bookName = book.name,
+                    chapterIndex = ReadBook.durChapterIndex,
+                    selectedText = selected,
+                )
+            }
+            R.id.menu_ai_character_tts -> ReadBook.book?.let { book ->
+                io.legado.app.ui.main.ai.CharacterTtsReadAloudActivity.launch(
+                    this@ReadBookActivity,
+                    bookUrl = book.bookUrl,
+                    chapterIndex = ReadBook.durChapterIndex,
+                )
+            }
+
             R.id.menu_reverse_content -> ReadBook.book?.let {
                 viewModel.reverseContent(it)
             }

@@ -148,6 +148,16 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_ai_assistant"
+        android:title="@string/ai_ask_about_book"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_ai_character_tts"
+        android:title="@string/ai_character_tts"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_help"
         android:title="@string/help"
         app:showAsAction="never" />
