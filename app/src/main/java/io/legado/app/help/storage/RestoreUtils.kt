@@ -5,11 +5,11 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.legado.app.constant.AppLog
-import io.legado.app.data.entities.Book
-import io.legado.app.data.entities.BookChapter
 import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
+import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.isJsonArray
+import io.legado.app.utils.toastOnUi
 import splitties.init.appCtx
 import java.io.File
 import java.io.FileInputStream
@@ -42,8 +42,8 @@ internal object RestoreUtils {
             val file = File(path, fileName)
             if (file.exists()) {
                 LogUtils.d(TAG, "阅读恢复备份 $fileName 文件大小 ${file.length()}")
-                FileInputStream(file).use {
-                    return GSON.fromJsonArray<T>(it).getOrThrow().also { list ->
+                FileInputStream(file).use { fis ->
+                    return GSON.fromJsonArray<T>(fis).getOrThrow().also { list ->
                         LogUtils.d(TAG, "阅读恢复备份 $fileName 列表大小 ${list.size}")
                     }
                 }

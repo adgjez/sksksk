@@ -6,6 +6,7 @@ import io.legado.app.help.config.ThemeConfig
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
+import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
