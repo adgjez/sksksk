@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
@@ -51,6 +52,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AiSettingsScreen(vm: AiSettingsViewModel = viewModel()) {
     val state by vm.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) { vm.refresh() }
@@ -108,6 +110,17 @@ fun AiSettingsScreen(vm: AiSettingsViewModel = viewModel()) {
             icon = { Icon(Icons.Filled.Add, contentDescription = null) },
             text = { Text("添加") },
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+        )
+        ExtendedFloatingActionButton(
+            onClick = {
+                context.startActivity(
+                    android.content.Intent(context, io.legado.app.ui.main.ai.AiSkillManagerActivity::class.java)
+                )
+            },
+            icon = { Icon(Icons.Filled.Build, contentDescription = null) },
+            text = { Text("技能") },
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
         )
     }
 
