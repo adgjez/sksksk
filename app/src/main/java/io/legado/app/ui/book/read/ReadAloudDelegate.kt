@@ -149,7 +149,6 @@ class ReadAloudDelegate(
      */
     interface Host {
         val activityContext: android.content.Context
-        val backgroundColor: Int
         fun autoPageStop()
         fun getReadAloudPos(): Pair<Int, io.legado.app.ui.book.read.page.entities.TextLine>?
         fun showReadAloudDialog()

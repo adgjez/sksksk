@@ -273,8 +273,9 @@ class ReadBookActivity : BaseReadBookActivity(),
         override var pageDelegateIsCancel: Boolean
             get() = binding.readView.pageDelegate?.isCancel ?: false
             set(value) { binding.readView.pageDelegate?.isCancel = value }
-        override fun keyTurnPage(direction: PageDirection) =
+        override fun keyTurnPage(direction: PageDirection) {
             binding.readView.pageDelegate?.keyTurnPage(direction)
+        }
         override fun isPrevKey(keyCode: Int) = this@ReadBookActivity.isPrevKey(keyCode)
         override fun isNextKey(keyCode: Int) = this@ReadBookActivity.isNextKey(keyCode)
     })
