@@ -7,7 +7,6 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.ai.tool.CharacterAssignment
 import io.legado.app.help.ai.tool.ParagraphSplitter
 import io.legado.app.help.book.BookHelp
-import io.legado.app.utils.msg
 
 /**
  * 角色朗读：拿章节正文，让 AI 标每段的角色+音色，返回结构化结果。
