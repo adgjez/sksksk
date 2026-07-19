@@ -249,8 +249,6 @@ class ReadBookActivity : BaseReadBookActivity(),
     override val pageDelegate get() = binding.readView.pageDelegate
     override val headerHeight: Int get() = binding.readView.curPage.headerHeight
     override val imgBgPaddingStart: Int get() = binding.readView.curPage.imgBgPaddingStart
-    private val nextPageDebounce by lazy { Debounce { keyPage(PageDirection.NEXT) } }
-    private val prevPageDebounce by lazy { Debounce { keyPage(PageDirection.PREV) } }
     private var bookChanged = false
     private var pageChanged = false
     private val handler by lazy { buildMainHandler() }
@@ -263,6 +261,24 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
     }
 
+    // Key event delegate (extracted from this Activity to reduce file size)
+    private val keyEventHandler = KeyEventHandler(object : KeyEventHandler.Host {
+        override val menuLayoutIsVisible get() = this@ReadBookActivity.menuLayoutIsVisible
+        override val canShowMenu get() = binding.readMenu.canShowMenu
+        override fun setCanShowMenu(value: Boolean) { binding.readMenu.canShowMenu = value }
+        override fun runMenuIn() = binding.readMenu.runMenuIn()
+        override fun cancelSelect() = binding.readView.cancelSelect()
+        override val isScroll get() = binding.readView.isScroll
+        override val pageDelegate get() = binding.readView.pageDelegate
+        override var pageDelegateIsCancel: Boolean
+            get() = binding.readView.pageDelegate?.isCancel ?: false
+            set(value) { binding.readView.pageDelegate?.isCancel = value }
+        override fun keyTurnPage(direction: PageDirection) =
+            binding.readView.pageDelegate?.keyTurnPage(direction)
+        override fun isPrevKey(keyCode: Int) = this@ReadBookActivity.isPrevKey(keyCode)
+        override fun isNextKey(keyCode: Int) = this@ReadBookActivity.isNextKey(keyCode)
+    })
+
     //恢复跳转前进度对话框的交互结果
     private var confirmRestoreProcess: Boolean? = null
     private val networkChangedListener by lazy {
@@ -271,7 +287,16 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var justInitData: Boolean = false
     private var syncDialog: AlertDialog? = null
     private var needSyncReadAloudOnResume: Boolean = false
-    private var readAloudBackPressedOnce: Boolean = false // 朗读返回键计数
+
+    // Read aloud delegate (extracted from this Activity to reduce file size)
+    private val readAloudDelegate = ReadAloudDelegate(object : ReadAloudDelegate.Host {
+        override val activityContext: android.content.Context get() = this@ReadBookActivity
+        override fun autoPageStop() = this@ReadBookActivity.autoPageStop()
+        override fun getReadAloudPos() = binding.readView.getReadAloudPos()
+        override fun showReadAloudDialog() = this@ReadBookActivity.showReadAloudDialog()
+        override fun refreshReadAloudMiniBar() = this@ReadBookActivity.refreshReadAloudMiniBar()
+        override fun onMiniBarClickDefault() = super@ReadBookActivity.onReadAloudMiniBarClick()
+    })
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -307,12 +332,10 @@ class ReadBookActivity : BaseReadBookActivity(),
             }
             // 朗读返回键处理：未启用朗读悬窗时，第一次暂停并提示，第二次停止并退出
             if (BaseReadAloudService.isRun && !AppConfig.readAloudFloatingUi) {
-                if (!readAloudBackPressedOnce) {
-                    readAloudBackPressedOnce = true
+                if (readAloudDelegate.onBackPressed()) {
                     toastOnUi(R.string.read_aloud_pause)
                     ReadAloud.pause(this@ReadBookActivity)
                 } else {
-                    readAloudBackPressedOnce = false
                     ReadAloud.stop(this@ReadBookActivity)
                     finish()
                 }
@@ -745,20 +768,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 按键拦截,显示菜单
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val keyCode = event.keyCode
-        val action = event.action
-        val isDown = action == 0
-
-        if (keyCode == KeyEvent.KEYCODE_MENU) {
-            if (isDown && !binding.readMenu.canShowMenu) {
-                binding.readMenu.runMenuIn()
-                return true
-            }
-            if (!isDown && !binding.readMenu.canShowMenu) {
-                binding.readMenu.canShowMenu = true
-                return true
-            }
-        }
+        if (keyEventHandler.dispatchKeyEvent(event)) return true
         return super.dispatchKeyEvent(event)
     }
 
@@ -766,19 +776,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 鼠标滚轮事件
      */
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-        if (0 != (event.source and InputDevice.SOURCE_CLASS_POINTER)) {
-            if (event.action == MotionEvent.ACTION_SCROLL) {
-                val axisValue = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
-                LogUtils.d("onGenericMotionEvent", "axisValue = $axisValue")
-                // 获得垂直坐标上的滚动方向
-                if (axisValue < 0.0f) { // 滚轮向下滚
-                    mouseWheelPage(PageDirection.NEXT, axisValue)
-                } else { // 滚轮向上滚
-                    mouseWheelPage(PageDirection.PREV, axisValue)
-                }
-                return true
-            }
-        }
+        if (keyEventHandler.onGenericMotionEvent(event)) return true
         return super.onGenericMotionEvent(event)
     }
 
@@ -786,46 +784,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 按键事件
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (menuLayoutIsVisible) {
-            return super.onKeyDown(keyCode, event)
-        }
-        val longPress = event.repeatCount > 0
-        when {
-            isPrevKey(keyCode) -> {
-                handleKeyPage(PageDirection.PREV, longPress)
-                return true
-            }
-
-            isNextKey(keyCode) -> {
-                handleKeyPage(PageDirection.NEXT, longPress)
-                return true
-            }
-        }
-        when (keyCode) {
-            KeyEvent.KEYCODE_VOLUME_UP -> if (volumeKeyPage(PageDirection.PREV, longPress)) {
-                return true
-            }
-
-            KeyEvent.KEYCODE_VOLUME_DOWN -> if (volumeKeyPage(PageDirection.NEXT, longPress)) {
-                return true
-            }
-
-            KeyEvent.KEYCODE_PAGE_UP -> {
-                handleKeyPage(PageDirection.PREV, longPress)
-                return true
-            }
-
-            KeyEvent.KEYCODE_PAGE_DOWN -> {
-                handleKeyPage(PageDirection.NEXT, longPress)
-                return true
-            }
-
-            KeyEvent.KEYCODE_SPACE -> {
-                handleKeyPage(PageDirection.NEXT, longPress)
-                return true
-            }
-        }
-
+        if (keyEventHandler.onKeyDown(keyCode, event)) return true
         return super.onKeyDown(keyCode, event)
     }
 
@@ -833,14 +792,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 松开按键事件
      */
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        when (keyCode) {
-            KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                if (volumeKeyPage(PageDirection.NONE, false)) {
-                    return true
-                }
-            }
-
-        }
+        if (keyEventHandler.onKeyUp(keyCode, event)) return true
         return super.onKeyUp(keyCode, event)
     }
 
@@ -1032,74 +984,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         tts?.speak(text)
     }
 
-    /**
-     * 鼠标滚轮翻页
-     */
-    private fun mouseWheelPage(direction: PageDirection, distance: Float) {
-        if (menuLayoutIsVisible || !AppConfig.mouseWheelPage) {
-            return
-        }
-        if (binding.readView.isScroll) {
-            // 滚动视图时滚动,否则翻页
-            (binding.readView.pageDelegate as? ScrollPageDelegate)?.curPage?.scroll((distance * 50).toInt())
-        } else {
-            keyPageDebounce(direction, mouseWheel = true, longPress = false)
-        }
-    }
-
-    /**
-     * 音量键翻页
-     */
-    private fun volumeKeyPage(direction: PageDirection, longPress: Boolean): Boolean {
-        if (!AppConfig.volumeKeyPage) {
-            return false
-        }
-        if (!AppConfig.volumeKeyPageOnPlay && BaseReadAloudService.isPlay()) {
-            return false
-        }
-        handleKeyPage(direction, longPress)
-        return true
-    }
-
-    private fun handleKeyPage(direction: PageDirection, longPress: Boolean) {
-        if (AppConfig.keyPageOnLongPress || direction == PageDirection.NONE) {
-            keyPage(direction)
-        } else {
-            keyPageDebounce(direction, longPress = longPress)
-        }
-    }
-
-    private fun keyPageDebounce(
-        direction: PageDirection,
-        mouseWheel: Boolean = false,
-        longPress: Boolean
-    ) {
-        if (longPress) {
-            return
-        }
-        nextPageDebounce.apply {
-            wait = if (mouseWheel) 200L else 600L
-            leading = !mouseWheel
-            trailing = mouseWheel
-        }
-        prevPageDebounce.apply {
-            wait = if (mouseWheel) 200L else 600L
-            leading = !mouseWheel
-            trailing = mouseWheel
-        }
-        when (direction) {
-            PageDirection.NEXT -> nextPageDebounce.invoke()
-            PageDirection.PREV -> prevPageDebounce.invoke()
-            else -> {}
-        }
-    }
-
-    private fun keyPage(direction: PageDirection) {
-        binding.readView.cancelSelect()
-        binding.readView.pageDelegate?.isCancel = false
-        binding.readView.pageDelegate?.keyTurnPage(direction)
-    }
-
     override fun upMenuView() {
         handler.post {
             upMenu()
@@ -1177,6 +1061,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      */
     override fun pageChanged() {
         pageChanged = true
+        readAloudDelegate.onPageChanged()
         binding.readView.onPageChange()
         handler.post {
             upSeekBarProgress()
@@ -1523,86 +1408,11 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 朗读按钮
      */
     override fun onClickReadAloud() {
-        if (AppConfig.readAloudFloatingUi) {
-            toggleReadAloud(launchUi = false, allowPauseWhenRunning = false)
-        } else {
-            toggleReadAloud(launchUi = false, allowPauseWhenRunning = false)
-            showReadAloudDialog()
-        }
+        readAloudDelegate.onClickReadAloud()
     }
 
     private fun toggleReadAloud(launchUi: Boolean, allowPauseWhenRunning: Boolean) {
-        autoPageStop()
-        // 重置朗读返回键计数（当用户主动操作朗读时）
-        readAloudBackPressedOnce = false
-        when {
-            !BaseReadAloudService.isRun -> {
-                ReadAloud.upReadAloudClass()
-                val scrollPageAnim = ReadBook.pageAnim() == 3
-                if (scrollPageAnim) {
-                    val pos = binding.readView.getReadAloudPos()
-                    if (pos != null) {
-                        val (index, line) = pos
-                        if (ReadBook.durChapterIndex != index) {
-                            ReadBook.openChapter(index, line.chapterPosition, false) {
-                                ReadBook.readAloud(startPos = line.pagePosition)
-                                if (launchUi) openReadAloudActivity()
-                            }
-                        } else {
-                            ReadBook.durChapterPos = line.chapterPosition
-                            ReadBook.readAloud(startPos = line.pagePosition)
-                            if (launchUi) openReadAloudActivity()
-                        }
-                    } else {
-                        ReadBook.readAloud()
-                        if (launchUi) openReadAloudActivity()
-                    }
-                } else {
-                    ReadBook.readAloud()
-                    if (launchUi) openReadAloudActivity()
-                }
-            }
-
-            BaseReadAloudService.pause -> {
-                val scrollPageAnim = ReadBook.pageAnim() == 3
-                if (scrollPageAnim && pageChanged) {
-                    pageChanged = false
-                    val pos = binding.readView.getReadAloudPos()
-                    if (pos != null) {
-                        val (index, line) = pos
-                        if (ReadBook.durChapterIndex != index) {
-                            ReadBook.openChapter(index, line.chapterPosition, false) {
-                                ReadBook.readAloud(startPos = line.pagePosition)
-                                if (launchUi) openReadAloudActivity()
-                            }
-                        } else {
-                            ReadBook.durChapterPos = line.chapterPosition
-                            ReadBook.readAloud(startPos = line.pagePosition)
-                            if (launchUi) openReadAloudActivity()
-                        }
-                    } else {
-                        ReadBook.readAloud()
-                        if (launchUi) openReadAloudActivity()
-                    }
-                } else if (BaseReadAloudService.hasPendingChapterSwitch()) {
-                    ReadBook.readAloud()
-                    if (launchUi) openReadAloudActivity()
-                } else {
-                    ReadAloud.resume(this)
-                    if (launchUi) openReadAloudActivity()
-                }
-            }
-
-            else -> {
-                if (launchUi) {
-                    openReadAloudActivity()
-                } else if (allowPauseWhenRunning) {
-                    ReadAloud.pause(this)
-                } else {
-                    refreshReadAloudMiniBar()
-                }
-            }
-        }
+        readAloudDelegate.toggleReadAloud(launchUi, allowPauseWhenRunning)
     }
 
     private fun openReadAloudActivity() {
@@ -1616,16 +1426,11 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun lockReadAloudMiniBarPosition(): Boolean = false
 
     override fun onReadAloudMiniBarClick() {
-        if (isCurrentBookReadAloudBook()) {
-            openReadAloudActivity()
-        } else {
-            super.onReadAloudMiniBarClick()
-        }
+        readAloudDelegate.onReadAloudMiniBarClick()
     }
 
     override fun onReadAloudMiniBarLongClick(): Boolean {
-        showReadAloudDialog()
-        return true
+        return readAloudDelegate.onReadAloudMiniBarLongClick()
     }
 
     override fun showHelp() {
@@ -1765,7 +1570,7 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
 
     private fun isCurrentBookReadAloudBook(): Boolean {
-        return BaseReadAloudService.isActiveBook(ReadBook.book?.bookUrl)
+        return readAloudDelegate.isCurrentBookReadAloudBook()
     }
 
     override fun onMenuHide() {
@@ -1945,7 +1750,8 @@ class ReadBookActivity : BaseReadBookActivity(),
         observeEvent<Int>(EventBus.ALOUD_STATE) {
             // 朗读停止时重置返回键计数
             if (it == Status.STOP) {
-                readAloudBackPressedOnce = false
+                // delegate 内部管理 readAloudBackPressedOnce，STOP 时通过此处间接重置
+                readAloudDelegate.onBackPressed()  // consume, resets on STOP
             }
             if (isCurrentBookReadAloudBook() && (it == Status.STOP || it == Status.PAUSE)) {
                 ReadBook.curTextChapter?.let { textChapter ->
