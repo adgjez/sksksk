@@ -1,32 +1,38 @@
 package io.legado.app.help.ai.skill
 
+import android.content.Context
+import android.content.SharedPreferences
 import io.legado.app.help.ai.memory.AiMemoryStore
+import splitties.init.appCtx
 
 /**
- * Skill 注册表：内置 presets + 用户可"激活/停用"（激活状态写 memory）。
+ * Skill 状态持久化。激活状态存 SharedPreferences，App 重启保留。
  *
- * Agent 启动时调用 [activeInstructions]，把激活的 skill 拼到 system prompt。
+ * 同时把激活状态"镜像"到 AiMemoryStore，以便 agent 的 list_skills /
+ * activate_skill 工具看到一致视图。
  */
 class SkillRegistry(
     private val memory: AiMemoryStore = AiMemoryStore.instance,
 ) {
+    private val prefs: SharedPreferences =
+        appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** 全部 skill。 */
     fun all(): List<Skill> = Skill.presets
 
     fun byName(name: String): Skill? = Skill.presets.firstOrNull { it.name == name }
 
-    /** 当前激活的 skill 集合。读自 memory。 */
+    /** 当前激活的 skill 集合。从 prefs 读，**不**从 memory 读（以 prefs 为准）。 */
     suspend fun active(): List<Skill> {
-        val active = mutableListOf<Skill>()
-        for (s in all()) {
-            val v = memory.get(Skill.activateMemoryKey(s.name), "global", "")
-            if (v?.value == "1") active.add(s)
-        }
-        return active
+        val set = activeNames()
+        return Skill.presets.filter { it.name in set }
     }
 
+    private fun activeNames(): Set<String> = prefs.getStringSet(KEY_ACTIVE, emptySet()) ?: emptySet()
+
     suspend fun activate(name: String) {
+        val updated = activeNames().toMutableSet().apply { add(name) }
+        prefs.edit().putStringSet(KEY_ACTIVE, updated).apply()
+        // 镜像到 memory（让 list_skills 工具能读）
         memory.put(
             io.legado.app.help.ai.memory.AiMemoryEntry(
                 id = "skill_${name}_on",
@@ -39,6 +45,8 @@ class SkillRegistry(
     }
 
     suspend fun deactivate(name: String) {
+        val updated = activeNames().toMutableSet().apply { remove(name) }
+        prefs.edit().putStringSet(KEY_ACTIVE, updated).apply()
         memory.put(
             io.legado.app.help.ai.memory.AiMemoryEntry(
                 id = "skill_${name}_off",
@@ -50,10 +58,9 @@ class SkillRegistry(
         )
     }
 
-    /**
-     * 拼一个 system prompt 段，列出当前激活的 skill。
-     * agent 启动时拼到 system prompt 末尾。
-     */
+    suspend fun isActive(name: String): Boolean = name in activeNames()
+
+    /** 拼 system prompt 段。 */
     suspend fun activeInstructions(): String {
         val active = active()
         if (active.isEmpty()) return ""
@@ -72,6 +79,8 @@ class SkillRegistry(
     }
 
     companion object {
+        private const val PREFS_NAME = "ai_skills"
+        private const val KEY_ACTIVE = "active_set"
         val instance by lazy { SkillRegistry() }
     }
 }
