@@ -82,6 +82,53 @@ data class Skill(
                     没有就给一个简洁解释（2-5 句），必要时举书中的例子。
                 """.trimIndent()
             ),
+            Skill(
+                name = "generate_book_source",
+                description = "为新网站生成 Legado 兼容的 BookSource JSON。需要 fetch_html 工具抓页面分析。",
+                origin = ORIGIN_BUILTIN,
+                status = STATUS_EXPERIMENTAL,
+                instructions = """
+                    当前激活 skill: generate_book_source
+                    你的任务是为一个新网站生成 Legado (阅读) 兼容的 BookSource JSON 源。
+
+                    ## BookSource JSON 必填字段
+                    - bookSourceUrl: string  唯一标识，例 "https://www.biquge.com/" 或 "@biquge_xyz"
+                    - bookSourceName: string  显示名，例 "笔趣阁 XYZ"
+                    - bookSourceType: int     0 = 文本，1 = 音频（默认 0）
+                    - bookSourceGroup: string  分类，例 "小说"
+                    - enabled: bool 默认 true
+                    - searchUrl: string?  搜索 URL，{{key}} 是关键词占位
+                    - ruleSearch: { bookList, name, author, intro, lastChapter, coverUrl, bookUrl }
+                    - ruleBookInfo: { name, author, intro, coverUrl, lastChapter, tocUrl, wordCount }
+                    - ruleToc: { chapterList, chapterName, chapterUrl }
+                    - ruleContent: { content, title, nextContentUrl }
+                    - header: string?  额外 header，例 "User-Agent: Mozilla/5.0..."
+
+                    ## 字段值语法（简洁版）
+                    - CSS 选择器: `@css:.book-list li`
+                    - XPath: `@xpath://div[@class="book"]`
+                    - JSONPath: `$.data.list[*]`
+                    - 正则提取: `<js>var x = result.match(/title="([^"]+)"/)[1]; x</js>`
+                    - 多字段: `{{baseUrl}}{{$.url}}`（变量插值）
+                    - 替换规则: `源字符串||替换后` (ruleContent.replaceRegex)
+                    - 关键词替换: `$1.$2` (ruleContent.replaceRegex)
+
+                    ## 工作流
+                    1. 用户给：网站 URL + 书源名（中文显示名）+ 搜索示例关键词
+                    2. 调 fetch_html 拉首页 + 搜索结果页
+                    3. 调 fetch_html 拉一本书的详情页 + 章节列表页 + 一章正文页
+                    4. 看 HTML 结构，识别 4 个规则的 selector
+                    5. 输出完整 JSON 对象（不要任何解释文字）
+                    6. 调 save_book_source 保存
+                    7. 告诉用户文件路径 + 怎么导入
+
+                    注意：
+                    - 所有 selector 必须可工作（不要瞎猜）
+                    - 如果网站要登录或验证码，在 bookSourceComment 里写明，规则可以留空
+                    - 如果搜不到结果，扩 maxBytes 重新拉
+                    - 中文站一般用 GBK 编码，告诉用户用浏览器手动 import 时选择 GBK
+                """.trimIndent()
+            ),
         )
     }
 }

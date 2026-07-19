@@ -13,10 +13,13 @@ import io.legado.app.help.ai.tool.AddNoteTool
 import io.legado.app.help.ai.tool.CreateSkillTool
 import io.legado.app.help.ai.tool.EvaluateSkillTool
 import io.legado.app.help.ai.tool.EvolveSkillTool
+import io.legado.app.help.ai.tool.FetchHtmlTool
 import io.legado.app.help.ai.tool.ListChaptersTool
 import io.legado.app.help.ai.tool.ListDeprecatedSkillsTool
 import io.legado.app.help.ai.tool.ListMySkillsTool
+import io.legado.app.help.ai.tool.ListSavedBookSourcesTool
 import io.legado.app.help.ai.tool.ReadMemoryTool
+import io.legado.app.help.ai.tool.SaveBookSourceTool
 import io.legado.app.help.ai.tool.SearchInBookTool
 import io.legado.app.help.ai.tool.SearchWebTool
 import io.legado.app.help.ai.tool.WriteMemoryTool
@@ -47,7 +50,7 @@ class Agent(
         extraTools: List<AiTool> = emptyList(),
     ): Result<AgentResult> = withContext(Dispatchers.IO) {
         runCatching {
-            // 默认工具集：记忆 + skill 自我进化 + 列出 deprecated skill + 通用工具
+            // 默认工具集：记忆 + skill 自我进化 + 列出 deprecated skill + 通用工具 + 书源生成
             val tools = extraTools + listOf(
                 ReadMemoryTool(memory),
                 WriteMemoryTool(memory),
@@ -60,6 +63,9 @@ class Agent(
                 ListChaptersTool(),
                 SearchInBookTool(),
                 SearchWebTool(),
+                FetchHtmlTool(),
+                SaveBookSourceTool(),
+                ListSavedBookSourcesTool(),
             )
             // 把 memory 内容 + 当前激活 skills 拼到 system prompt
             val memorySection = memory.forPrompt()

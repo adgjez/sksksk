@@ -66,6 +66,17 @@ fun AiSettingsScreen(vm: AiSettingsViewModel = viewModel()) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.AssistChip(
+                    onClick = {
+                        context.startActivity(
+                            android.content.Intent(context, io.legado.app.ui.main.ai.BookSourceGeneratorActivity::class.java)
+                        )
+                    },
+                    label = { Text("AI 生成书源") }
+                )
+            }
             Spacer(Modifier.height(12.dp))
 
             if (state.providers.isEmpty() && !state.loading) {
