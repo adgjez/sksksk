@@ -27,6 +27,7 @@ import io.legado.app.ui.config.ConfigActivity
 import io.legado.app.ui.config.ConfigTag
 import io.legado.app.ui.debug.DebugToolsActivity
 import io.legado.app.ui.dict.rule.DictRuleActivity
+import io.legado.app.ui.main.ai.AiActivity
 import io.legado.app.ui.urlRecord.UrlRecordActivity
 import io.legado.app.ui.file.FileManageActivity
 import io.legado.app.ui.download.DownloadManageActivity
@@ -165,6 +166,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config), MainFragmentInte
                 "dictRuleManage" -> startActivity<DictRuleActivity>()
                 "txtTocRuleManage" -> startActivity<TxtTocRuleActivity>()
                 "debugTools" -> startActivity<DebugToolsActivity>()
+                "aiAssistant" -> startActivity<AiActivity>()
                 "urlRecord" -> startActivity<UrlRecordActivity>()
                 "bookmark" -> startActivity<AllBookmarkActivity>()
                 "preciseManage" -> startActivity<ConfigActivity> {

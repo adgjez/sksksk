@@ -39,6 +39,13 @@
         android:title="@string/debug_tools"
         app:iconSpaceReserved="false" />
 
+    <io.legado.app.lib.prefs.Preference
+        android:icon="@drawable/ic_code"
+        android:key="aiAssistant"
+        android:summary="AI 助手：聊天、书源生成、技能管理"
+        android:title="AI 助手"
+        app:iconSpaceReserved="false" />
+
     
 
     <io.legado.app.lib.prefs.NameListPreference
