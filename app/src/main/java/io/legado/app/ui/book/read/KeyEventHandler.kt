@@ -3,7 +3,6 @@ package io.legado.app.ui.book.read
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
-import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.page.delegate.ScrollPageDelegate

@@ -4,9 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
-import android.os.Looper
 import android.view.Gravity
-import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
@@ -58,7 +56,6 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
-import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.analyzeRule.AnalyzeRule
@@ -66,7 +63,6 @@ import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setChapter
 import io.legado.app.model.analyzeRule.AnalyzeRule.Companion.setCoroutineContext
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-import io.legado.app.utils.isJsonObject
 import io.legado.app.model.localBook.EpubFile
 import io.legado.app.model.localBook.MobiFile
 import io.legado.app.receiver.NetworkChangedListener
@@ -91,7 +87,6 @@ import io.legado.app.ui.book.read.config.TipConfigDialog.Companion.TIP_COLOR
 import io.legado.app.ui.book.read.config.TipConfigDialog.Companion.TIP_DIVIDER_COLOR
 import io.legado.app.ui.book.read.page.ContentTextView
 import io.legado.app.ui.book.read.page.ReadView
-import io.legado.app.ui.book.read.page.delegate.ScrollPageDelegate
 import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
@@ -111,7 +106,6 @@ import io.legado.app.ui.replace.edit.ReplaceEditActivity
 import io.legado.app.ui.widget.PopupAction
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.utils.ACache
-import io.legado.app.utils.Debounce
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.StartActivityContract
@@ -557,10 +551,6 @@ class ReadBookActivity : BaseReadBookActivity(),
                 else -> when (item.itemId) {
                     R.id.menu_enable_replace -> item.isChecked = book.getUseReplaceRule()
                     R.id.menu_re_segment -> item.isChecked = book.getReSegment()
-//                    R.id.menu_enable_review -> {
-//                        item.isVisible = BuildConfig.DEBUG
-//                        item.isChecked = AppConfig.enableReview
-//                    }
 
                     R.id.menu_reverse_content -> item.isVisible = onLine
                     R.id.menu_del_ruby_tag -> item.isChecked = book.getDelTag(Book.rubyTag)
@@ -657,12 +647,6 @@ class ReadBookActivity : BaseReadBookActivity(),
                 item.isChecked = it.getReSegment()
                 ReadBook.loadContent(false)
             }
-
-//            R.id.menu_enable_review -> {
-//                AppConfig.enableReview = !AppConfig.enableReview
-//                item.isChecked = AppConfig.enableReview
-//                ReadBook.loadContent(false)
-//            }
 
             R.id.menu_del_ruby_tag -> ReadBook.book?.let {
                 item.isChecked = !item.isChecked

@@ -7,7 +7,6 @@ import io.legado.app.data.entities.CoverGalleryImage
 import io.legado.app.data.repository.CoverGalleryRepository
 import io.legado.app.help.CacheManager
 import io.legado.app.model.BookCover
-import io.legado.app.utils.LogUtils
 import io.legado.app.utils.createFolderIfNotExist
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.getFile

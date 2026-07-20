@@ -34,7 +34,6 @@ import io.legado.app.model.localBook.LocalBook
 import io.legado.app.ui.book.read.websearch.SearchEngine
 import io.legado.app.ui.book.read.websearch.SearchEngineHelper
 import io.legado.app.utils.GSON
-import io.legado.app.utils.LogUtils
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.isJsonArray

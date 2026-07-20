@@ -8,7 +8,6 @@ import io.legado.app.constant.AppLog
 import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.fromJsonArray
-import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.toastOnUi
 import splitties.init.appCtx
 import java.io.File

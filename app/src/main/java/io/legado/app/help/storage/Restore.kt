@@ -8,7 +8,6 @@ import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
-import io.legado.app.data.appDb
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.config.LocalConfig
