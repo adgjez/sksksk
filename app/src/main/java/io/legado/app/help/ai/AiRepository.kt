@@ -43,6 +43,7 @@ class AiRepository(
 
     fun messagesOf(conversationId: String) = appDb.aiConversationDao.messages(conversationId)
     fun saveMessage(m: AiMessage) = appDb.aiConversationDao.upsertMessage(m)
+    fun deleteMessage(id: String) = appDb.aiConversationDao.deleteMessage(id)
     fun deleteMessages(conversationId: String) = appDb.aiConversationDao.deleteMessages(conversationId)
 
     fun listImages() = appDb.aiImageDao.all()

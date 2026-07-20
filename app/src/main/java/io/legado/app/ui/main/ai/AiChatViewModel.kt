@@ -32,6 +32,8 @@ data class ChatUiState(
     val toolLog: List<ToolCallLog> = emptyList(),
     val agentMode: Boolean = AppConfig.aiAgentModeDefault,
     val showConversationList: Boolean = false,
+    val totalPromptTokens: Int = 0,
+    val totalCompletionTokens: Int = 0,
 )
 
 class AiChatViewModel(
@@ -67,6 +69,28 @@ class AiChatViewModel(
 
     fun toggleAgentMode() {
         _state.update { it.copy(agentMode = !it.agentMode) }
+    }
+
+    fun deleteMessage(msg: AiMessage) {
+        if (io.legado.app.help.config.AppConfig.aiChatPersist) {
+            repo.deleteMessage(msg.id)
+        }
+        _state.update { it.copy(messages = it.messages.filterNot { m -> m.id == msg.id }) }
+    }
+
+    fun retry() {
+        val lastUser = _state.value.messages.lastOrNull { it.role == AiMessage.ROLE_USER } ?: return
+        // 删除 lastUser 之后的所有消息
+        val idx = _state.value.messages.indexOfLast { it.id == lastUser.id }
+        val kept = _state.value.messages.subList(0, idx)
+        _state.update { it.copy(messages = kept, error = null, streaming = null) }
+        val provider = _state.value.activeProvider ?: return
+        val conversation = _state.value.conversation ?: return
+        if (_state.value.agentMode) {
+            viewModelScope.launch { sendViaAgent(provider, conversation, lastUser.content) }
+        } else {
+            viewModelScope.launch { sendViaStream(provider, conversation, lastUser.content) }
+        }
     }
 
     fun toggleConversationList() {
@@ -188,6 +212,8 @@ class AiChatViewModel(
                     streaming = null,
                     sending = false,
                     toolLog = agentResult.toolLog,
+                    totalPromptTokens = it.totalPromptTokens + agentResult.totalPromptTokens,
+                    totalCompletionTokens = it.totalCompletionTokens + agentResult.totalCompletionTokens,
                 )
             }
         }.onFailure { t ->

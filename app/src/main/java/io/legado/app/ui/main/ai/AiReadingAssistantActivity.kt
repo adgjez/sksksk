@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -312,6 +313,15 @@ private fun AiReadingAssistantScreen(
                 Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
                     Text(err, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer)
                 }
+            }
+            // Quick actions
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                AssistChip(onClick = { scope.launch { vm.send("总结当前章节的内容") } }, enabled = !state.sending) { Text("总结本章") }
+                AssistChip(onClick = { scope.launch { vm.send("解释这一章的重点和伏笔") } }, enabled = !state.sending) { Text("解读") }
+                AssistChip(onClick = { scope.launch { vm.send("分析当前章节的主要人物和关系") } }, enabled = !state.sending) { Text("人物分析") }
             }
             Surface(tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
                 Row(

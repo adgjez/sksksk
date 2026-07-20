@@ -12,6 +12,7 @@ import io.legado.app.help.ai.skill.SkillRegistry
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.ai.tool.AiTool
 import io.legado.app.help.ai.tool.AddNoteTool
+import io.legado.app.help.ai.tool.AnalyzeCharactersTool
 import io.legado.app.help.ai.tool.CheckBookSourcesTool
 import io.legado.app.help.ai.tool.CreateSkillTool
 import io.legado.app.help.ai.tool.EvaluateSkillTool
@@ -236,10 +237,11 @@ class Agent(
         FetchHtmlTool(),
         SaveBookSourceTool(),
         ListSavedBookSourcesTool(),
-        // New tools: book source analysis + reading stats
+        // New tools: book source analysis + reading stats + character analysis
         CheckBookSourcesTool(),
         ReadStatsTool(),
         ValidateBookSourceTool(),
+        AnalyzeCharactersTool(),
     )
 
     private suspend fun buildSystemPrompt(base: String): String {

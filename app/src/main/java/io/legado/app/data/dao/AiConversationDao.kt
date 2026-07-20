@@ -30,6 +30,9 @@ interface AiConversationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun upsertMessage(message: AiMessage)
 
+    @Query("DELETE FROM ai_messages WHERE id = :id")
+    fun deleteMessage(id: String)
+
     @Query("DELETE FROM ai_messages WHERE conversationId = :conversationId")
     fun deleteMessages(conversationId: String)
 }

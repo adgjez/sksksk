@@ -2,6 +2,8 @@ package io.legado.app.ui.main.ai
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,19 +23,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -95,6 +102,32 @@ fun AiChatScreen(vm: AiChatViewModel = viewModel()) {
             }
         }
 
+        // Token usage
+        if (state.totalPromptTokens > 0 || state.totalCompletionTokens > 0) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            Text(
+                text = "Tokens: ↑${state.totalPromptTokens} ↓${state.totalCompletionTokens}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = {
+                            val text = state.messages.joinToString("\n\n") { m ->
+                                "${if (m.role == "user") "我" else "AI"}: ${m.content}"
+                            }
+                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, text)
+                            }
+                            context.startActivity(android.content.Intent.createChooser(intent, "导出会话"))
+                        }
+                    ),
+            )
+        }
+
         // Conversation list drawer
         AnimatedVisibility(visible = state.showConversationList) {
             LazyColumn(
@@ -145,7 +178,7 @@ fun AiChatScreen(vm: AiChatViewModel = viewModel()) {
             if (state.messages.isEmpty() && !state.sending) {
                 item { EmptyHint("开始聊天", "输入消息，按下右箭头发送。\nAgent 模式支持工具调用。") }
             }
-            items(state.messages, key = { it.id }) { m -> MessageBubble(m) }
+            items(state.messages, key = { it.id }) { m -> MessageBubble(m, onDelete = { vm.deleteMessage(m) }) }
             state.streaming?.let { stream ->
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -171,7 +204,17 @@ fun AiChatScreen(vm: AiChatViewModel = viewModel()) {
         // Error
         state.error?.let { err ->
             Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
-                Text(text = err, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = err,
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    TextButton(onClick = { vm.retry() }) { Text("重试") }
+                }
             }
         }
 
@@ -240,25 +283,69 @@ private fun ToolLogSection(toolLog: List<ToolCallLog>) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MessageBubble(m: AiMessage) {
+private fun MessageBubble(m: AiMessage, onDelete: (AiMessage) -> Unit = {}) {
     val isUser = m.role == AiMessage.ROLE_USER
     val bg = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val fg = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
-        Surface(
-            color = bg,
-            shape = RoundedCornerShape(
-                topStart = 16.dp, topEnd = 16.dp,
-                bottomStart = if (isUser) 16.dp else 4.dp,
-                bottomEnd = if (isUser) 4.dp else 16.dp,
-            ),
-            modifier = Modifier.widthIn(max = 320.dp)
-        ) {
-            Text(text = m.content, color = fg, modifier = Modifier.padding(12.dp), textAlign = TextAlign.Start)
+        Box {
+            Surface(
+                color = bg,
+                shape = RoundedCornerShape(
+                    topStart = 16.dp, topEnd = 16.dp,
+                    bottomStart = if (isUser) 16.dp else 4.dp,
+                    bottomEnd = if (isUser) 4.dp else 16.dp,
+                ),
+                modifier = Modifier
+                    .widthIn(max = 320.dp)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { showMenu = true }
+                    )
+            ) {
+                Text(text = m.content, color = fg, modifier = Modifier.padding(12.dp), textAlign = TextAlign.Start)
+            }
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text("复制") },
+                    leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("AI Message", m.content))
+                        showMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("分享") },
+                    leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                    onClick = {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, m.content)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(intent, "分享"))
+                        showMenu = false
+                    }
+                )
+                if (!isUser) {
+                    DropdownMenuItem(
+                        text = { Text("删除") },
+                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                        onClick = {
+                            onDelete(m)
+                            showMenu = false
+                        }
+                    )
+                }
+            }
         }
     }
 }
