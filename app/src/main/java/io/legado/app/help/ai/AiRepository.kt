@@ -105,7 +105,7 @@ class AiRepository(
         stream: ChatStream,
     ): EventSource? {
         val fullSystem = globalSystemPrefix().let { if (it.isBlank()) systemPrompt else "$it\n\n$systemPrompt" }
-        serviceFor(provider).chatStream(provider, fullSystem, history, tools = emptyList(), stream = stream, temperature = globalTemp(), maxTokens = globalMaxTokens())
+        return serviceFor(provider).chatStream(provider, fullSystem, history, tools = emptyList(), stream = stream, temperature = globalTemp(), maxTokens = globalMaxTokens())
     }
 
     suspend fun generateImage(

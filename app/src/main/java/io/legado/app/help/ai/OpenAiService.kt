@@ -101,7 +101,7 @@ class OpenAiService : AiService {
             .post(body.toString().toRequestBody(jsonMedia))
             .build()
 
-        withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             val accumulated = StringBuilder()
             val allChunks = StringBuilder()
             val es = EventSources.createFactory(okHttpClient)

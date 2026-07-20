@@ -106,7 +106,7 @@ class AnthropicService : AiService {
             .post(body.toString().toRequestBody(jsonMedia))
             .build()
 
-        withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             val accumulated = StringBuilder()
             val toolCallBuffers = mutableMapOf<Int, JSONObject>()
 
