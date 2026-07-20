@@ -164,7 +164,8 @@ class AiChatViewModel(
         text: String,
     ) {
         _state.update { it.copy(streaming = "思考中…") }
-        val history = repo.messagesOf(conversation.id)
+        // 从内存 state 读历史（aiChatPersist=false 时 Room 中可能没有最新消息）
+        val history = _state.value.messages
         val result = agent.run(
             provider = provider,
             systemPrompt = conversation.systemPrompt.ifBlank { "你是一个有帮助的助手。" },
@@ -237,7 +238,9 @@ class AiChatViewModel(
             }
         }
         try {
-            repo.askStream(provider, conversation.id, text, stream = stream)
+            // 从内存 state 读历史（aiChatPersist=false 时 Room 中可能没有最新消息）
+            val history = _state.value.messages
+            repo.askStream(provider, history, conversation.systemPrompt.ifBlank { "你是一个有帮助的助手。" }, stream = stream)
         } catch (t: Throwable) {
             _state.update { it.copy(error = t.message ?: t.javaClass.simpleName, sending = false, streaming = null) }
         }

@@ -90,8 +90,15 @@ class AiRepository(
         systemPrompt: String = "你是一个有帮助的助手。",
         stream: ChatStream,
     ) {
-        // 用户消息由调用方（ViewModel）保存，这里不再重复保存
-        val history = messagesOf(conversationId)
+        askStream(provider, messagesOf(conversationId), systemPrompt, stream)
+    }
+
+    suspend fun askStream(
+        provider: AiProvider,
+        history: List<AiMessage>,
+        systemPrompt: String,
+        stream: ChatStream,
+    ) {
         val fullSystem = globalSystemPrefix().let { if (it.isBlank()) systemPrompt else "$it\n\n$systemPrompt" }
         serviceFor(provider).chatStream(provider, fullSystem, history, tools = emptyList(), stream = stream, temperature = globalTemp(), maxTokens = globalMaxTokens())
     }
