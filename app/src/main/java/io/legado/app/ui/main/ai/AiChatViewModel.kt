@@ -8,6 +8,12 @@ import io.legado.app.data.entities.AiProvider
 import io.legado.app.help.ai.AiRepository
 import io.legado.app.help.ai.ChatResult
 import io.legado.app.help.ai.ChatStream
+import io.legado.app.help.ai.agent.Agent
+import io.legado.app.help.ai.agent.AgentResult
+import io.legado.app.help.ai.agent.ToolCallLog
+import io.legado.app.help.ai.memory.AiMemoryStore
+import io.legado.app.help.ai.skill.SkillRegistry
+import io.legado.app.help.config.AppConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,14 +24,22 @@ import java.util.UUID
 data class ChatUiState(
     val activeProvider: AiProvider? = null,
     val conversation: AiConversation? = null,
+    val conversations: List<AiConversation> = emptyList(),
     val messages: List<AiMessage> = emptyList(),
     val sending: Boolean = false,
     val streaming: String? = null,
     val error: String? = null,
+    val toolLog: List<ToolCallLog> = emptyList(),
+    val agentMode: Boolean = AppConfig.aiAgentModeDefault,
+    val showConversationList: Boolean = false,
 )
 
 class AiChatViewModel(
     private val repo: AiRepository = AiRepository.instance,
+    private val agent: Agent = Agent(
+        memory = AiMemoryStore.instance,
+        skills = SkillRegistry.instance,
+    ),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -36,10 +50,85 @@ class AiChatViewModel(
     fun refresh() {
         viewModelScope.launch {
             val provider = repo.listEnabledProviders().firstOrNull()
-            val conversation = ensureConversation(provider)
+            val conversations = repo.listConversations()
+            val conversation = conversations.firstOrNull { it.providerId == provider?.id }
+                ?: ensureConversation(provider)
             val messages = conversation?.let { repo.messagesOf(it.id) } ?: emptyList()
             _state.update {
-                it.copy(activeProvider = provider, conversation = conversation, messages = messages)
+                it.copy(
+                    activeProvider = provider,
+                    conversations = conversations,
+                    conversation = conversation,
+                    messages = messages,
+                )
+            }
+        }
+    }
+
+    fun toggleAgentMode() {
+        _state.update { it.copy(agentMode = !it.agentMode) }
+    }
+
+    fun toggleConversationList() {
+        _state.update { it.copy(showConversationList = !it.showConversationList) }
+    }
+
+    fun newConversation() {
+        val provider = _state.value.activeProvider ?: return
+        viewModelScope.launch {
+            val fresh = AiConversation(
+                id = UUID.randomUUID().toString(),
+                title = "新会话",
+                providerId = provider.id,
+                systemPrompt = "你是一个有帮助的助手。",
+            )
+            repo.saveConversation(fresh)
+            val conversations = repo.listConversations()
+            _state.update {
+                it.copy(
+                    conversations = conversations,
+                    conversation = fresh,
+                    messages = emptyList(),
+                    showConversationList = false,
+                    error = null,
+                    streaming = null,
+                )
+            }
+        }
+    }
+
+    fun switchConversation(conv: AiConversation) {
+        viewModelScope.launch {
+            val messages = repo.messagesOf(conv.id)
+            _state.update {
+                it.copy(
+                    conversation = conv,
+                    messages = messages,
+                    showConversationList = false,
+                    error = null,
+                    streaming = null,
+                )
+            }
+        }
+    }
+
+    fun deleteConversation(conv: AiConversation) {
+        viewModelScope.launch {
+            repo.deleteConversation(conv.id)
+            val conversations = repo.listConversations()
+            val current = if (_state.value.conversation?.id == conv.id) {
+                conversations.firstOrNull { it.providerId == _state.value.activeProvider?.id }
+                    ?: ensureConversation(_state.value.activeProvider)
+            } else {
+                _state.value.conversation
+            }
+            val messages = current?.let { repo.messagesOf(it.id) } ?: emptyList()
+            _state.update {
+                it.copy(
+                    conversations = conversations,
+                    conversation = current,
+                    messages = messages,
+                )
             }
         }
     }
@@ -47,7 +136,7 @@ class AiChatViewModel(
     fun send(text: String) {
         val provider = _state.value.activeProvider ?: return
         val conversation = _state.value.conversation ?: return
-        _state.update { it.copy(sending = true, error = null) }
+        _state.update { it.copy(sending = true, error = null, toolLog = emptyList()) }
 
         viewModelScope.launch {
             val userMsg = AiMessage(
@@ -59,40 +148,92 @@ class AiChatViewModel(
             repo.saveMessage(userMsg)
             _state.update { it.copy(messages = it.messages + userMsg) }
 
-            val accumulated = StringBuilder()
-            val stream = object : ChatStream {
-                override fun onDelta(delta: String, isFinal: Boolean) {
-                    if (delta.isNotEmpty()) {
-                        accumulated.append(delta)
-                        _state.update { it.copy(streaming = accumulated.toString()) }
-                    }
-                }
-                override fun onError(t: Throwable) {
-                    _state.update { it.copy(error = t.message ?: t.javaClass.simpleName, sending = false, streaming = null) }
-                }
-                override fun onComplete(result: ChatResult) {
-                    val assistant = AiMessage(
-                        id = UUID.randomUUID().toString(),
-                        conversationId = conversation.id,
-                        role = AiMessage.ROLE_ASSISTANT,
-                        content = accumulated.toString(),
-                        promptTokens = result.promptTokens,
-                        completionTokens = result.completionTokens,
-                    )
-                    viewModelScope.launch {
-                        repo.saveMessage(assistant)
-                        repo.saveConversation(conversation.copy(updatedAt = System.currentTimeMillis()))
-                        _state.update {
-                            it.copy(messages = it.messages + assistant, streaming = null, sending = false)
-                        }
-                    }
+            if (_state.value.agentMode) {
+                sendViaAgent(provider, conversation, text)
+            } else {
+                sendViaStream(provider, conversation, text)
+            }
+        }
+    }
+
+    private suspend fun sendViaAgent(
+        provider: AiProvider,
+        conversation: AiConversation,
+        text: String,
+    ) {
+        _state.update { it.copy(streaming = "思考中…") }
+        val history = repo.messagesOf(conversation.id)
+        val result = agent.run(
+            provider = provider,
+            systemPrompt = conversation.systemPrompt.ifBlank { "你是一个有帮助的助手。" },
+            history = history,
+        )
+        result.onSuccess { agentResult: AgentResult ->
+            val assistant = AiMessage(
+                id = UUID.randomUUID().toString(),
+                conversationId = conversation.id,
+                role = AiMessage.ROLE_ASSISTANT,
+                content = agentResult.finalText,
+            )
+            repo.saveMessage(assistant)
+            repo.saveConversation(conversation.copy(updatedAt = System.currentTimeMillis()))
+            _state.update {
+                it.copy(
+                    messages = it.messages + assistant,
+                    streaming = null,
+                    sending = false,
+                    toolLog = agentResult.toolLog,
+                )
+            }
+        }.onFailure { t ->
+            _state.update {
+                it.copy(
+                    error = t.message ?: t.javaClass.simpleName,
+                    sending = false,
+                    streaming = null,
+                )
+            }
+        }
+    }
+
+    private suspend fun sendViaStream(
+        provider: AiProvider,
+        conversation: AiConversation,
+        text: String,
+    ) {
+        val accumulated = StringBuilder()
+        val stream = object : ChatStream {
+            override fun onDelta(delta: String, isFinal: Boolean) {
+                if (delta.isNotEmpty()) {
+                    accumulated.append(delta)
+                    _state.update { it.copy(streaming = accumulated.toString()) }
                 }
             }
-            try {
-                repo.askStream(provider, conversation.id, text, stream = stream)
-            } catch (t: Throwable) {
+            override fun onError(t: Throwable) {
                 _state.update { it.copy(error = t.message ?: t.javaClass.simpleName, sending = false, streaming = null) }
             }
+            override fun onComplete(result: ChatResult) {
+                val assistant = AiMessage(
+                    id = UUID.randomUUID().toString(),
+                    conversationId = conversation.id,
+                    role = AiMessage.ROLE_ASSISTANT,
+                    content = accumulated.toString(),
+                    promptTokens = result.promptTokens,
+                    completionTokens = result.completionTokens,
+                )
+                viewModelScope.launch {
+                    repo.saveMessage(assistant)
+                    repo.saveConversation(conversation.copy(updatedAt = System.currentTimeMillis()))
+                    _state.update {
+                        it.copy(messages = it.messages + assistant, streaming = null, sending = false)
+                    }
+                }
+            }
+        }
+        try {
+            repo.askStream(provider, conversation.id, text, stream = stream)
+        } catch (t: Throwable) {
+            _state.update { it.copy(error = t.message ?: t.javaClass.simpleName, sending = false, streaming = null) }
         }
     }
 

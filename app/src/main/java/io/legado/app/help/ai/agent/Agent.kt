@@ -3,11 +3,13 @@ package io.legado.app.help.ai.agent
 import io.legado.app.data.entities.AiMessage
 import io.legado.app.data.entities.AiProvider
 import io.legado.app.help.ai.AiService
+import io.legado.app.help.ai.AnthropicService
 import io.legado.app.help.ai.ChatResult
 import io.legado.app.help.ai.OpenAiService
 import io.legado.app.help.ai.memory.AiMemoryStore
 import io.legado.app.help.ai.skill.Skill
 import io.legado.app.help.ai.skill.SkillRegistry
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.ai.tool.AiTool
 import io.legado.app.help.ai.tool.AddNoteTool
 import io.legado.app.help.ai.tool.CheckBookSourcesTool
@@ -46,7 +48,8 @@ import java.util.UUID
  * - 连续错误计数，超过阈值后优雅退出
  */
 class Agent(
-    private val service: AiService = OpenAiService(),
+    private val openAiService: AiService = OpenAiService(),
+    private val anthropicService: AiService = AnthropicService(),
     private val memory: AiMemoryStore = AiMemoryStore.instance,
     private val skills: SkillRegistry = SkillRegistry.instance,
     private val maxSteps: Int = 8,
@@ -54,6 +57,11 @@ class Agent(
     private val toolTimeoutMs: Long = 30_000L,
     private val maxConsecutiveErrors: Int = 3,
 ) {
+
+    /** 根据 Provider 类型选择对应的 AiService 实现。 */
+    private fun serviceFor(provider: AiProvider): AiService {
+        return if (provider.type == AiProvider.TYPE_ANTHROPIC) anthropicService else openAiService
+    }
 
     /** 启动一个带工具的对话。返回最终 Assistant 文本。 */
     suspend fun run(
@@ -73,7 +81,9 @@ class Agent(
             for (step in 1..maxSteps) {
                 // chat with retry
                 val result = try {
-                    chatWithRetry(provider, fullSystem, working, tools)
+                    val temp = AppConfig.aiTemperature.let { if (it < 0) 0.7 else it.toDouble() }
+                    val maxTok = AppConfig.aiMaxTokens.let { if (it <= 0) 2048 else it }
+                    chatWithRetry(serviceFor(provider), provider, fullSystem, working, tools, temp, maxTok)
                 } catch (t: Throwable) {
                     consecutiveErrors++
                     if (consecutiveErrors >= maxConsecutiveErrors) {
@@ -146,14 +156,17 @@ class Agent(
      * Retries on network errors, rate limits (429), and server errors (5xx).
      */
     private suspend fun chatWithRetry(
+        service: AiService,
         provider: AiProvider,
         systemPrompt: String,
         messages: MutableList<AiMessage>,
         tools: List<AiTool>,
+        temperature: Double,
+        maxTokens: Int,
     ): ChatResult {
         var lastError: Throwable? = null
         for (attempt in 0..maxRetries) {
-            val result = service.chat(provider, systemPrompt, messages, tools)
+            val result = service.chat(provider, systemPrompt, messages, tools, temperature, maxTokens)
             if (result.isSuccess) return result.getOrThrow()
             lastError = result.exceptionOrNull()
             // Don't retry on client errors (4xx except 429)
@@ -219,9 +232,11 @@ class Agent(
     )
 
     private suspend fun buildSystemPrompt(base: String): String {
+        val globalPrefix = AppConfig.aiGlobalSystemPrompt
         val memorySection = memory.forPrompt()
         val skillsSection = skills.activeInstructions()
         return buildString {
+            if (globalPrefix.isNotBlank()) { append(globalPrefix); append("\n\n") }
             append(base)
             if (memorySection.isNotBlank()) { append("\n\n"); append(memorySection) }
             if (skillsSection.isNotBlank()) { append("\n\n"); append(skillsSection) }

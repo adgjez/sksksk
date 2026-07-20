@@ -1124,5 +1124,42 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         set(value) {
             appCtx.putPrefString(PreferKey.bookshelfIconStyle, value.toString())
         }
+
+    // ===== AI 全局配置 =====
+
+    /** AI Temperature (-1=使用模型默认, 0.0~2.0) */
+    var aiTemperature: Float
+        get() = appCtx.getPrefString(PreferKey.aiTemperature)?.toFloatOrNull() ?: -1f
+        set(value) {
+            appCtx.putPrefString(PreferKey.aiTemperature, value.toString())
+        }
+
+    /** AI MaxTokens (0=使用模型默认) */
+    var aiMaxTokens: Int
+        get() = appCtx.getPrefInt(PreferKey.aiMaxTokens, 0)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.aiMaxTokens, value)
+        }
+
+    /** AI 全局 System Prompt 前缀 */
+    var aiGlobalSystemPrompt: String
+        get() = appCtx.getPrefString(PreferKey.aiGlobalSystemPrompt) ?: ""
+        set(value) {
+            appCtx.putPrefString(PreferKey.aiGlobalSystemPrompt, value)
+        }
+
+    /** Agent 模式默认开启 */
+    var aiAgentModeDefault: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.aiAgentModeDefault, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.aiAgentModeDefault, value)
+        }
+
+    /** 聊天记录持久化 */
+    var aiChatPersist: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.aiChatPersist, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.aiChatPersist, value)
+        }
 }
 

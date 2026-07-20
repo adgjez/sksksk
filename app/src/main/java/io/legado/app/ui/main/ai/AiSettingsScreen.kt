@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +48,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.legado.app.data.entities.AiProvider
+import io.legado.app.help.config.AppConfig
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,6 +117,9 @@ fun AiSettingsScreen(vm: AiSettingsViewModel = viewModel()) {
                     )
                 }
             }
+
+            Spacer(Modifier.height(12.dp))
+            GlobalConfigSection()
         }
 
         ExtendedFloatingActionButton(
@@ -143,6 +149,91 @@ fun AiSettingsScreen(vm: AiSettingsViewModel = viewModel()) {
             onTest = { p -> scope.launch { vm.test(p) } },
             testing = state.testing,
         )
+    }
+}
+
+@Composable
+private fun GlobalConfigSection() {
+    var showConfig by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(1.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.size(8.dp))
+            Text("全局配置", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            IconButton(onClick = { showConfig = !showConfig }) {
+                Text(if (showConfig) "收起" else "展开", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        if (showConfig) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                var temp by remember { mutableStateOf(AppConfig.aiTemperature.toString()) }
+                var maxTok by remember { mutableStateOf(AppConfig.aiMaxTokens.toString()) }
+                var sysPrompt by remember { mutableStateOf(AppConfig.aiGlobalSystemPrompt) }
+                var agentDefault by remember { mutableStateOf(AppConfig.aiAgentModeDefault) }
+                var persist by remember { mutableStateOf(AppConfig.aiChatPersist) }
+
+                OutlinedTextField(
+                    value = temp,
+                    onValueChange = {
+                        temp = it
+                        it.toFloatOrNull()?.let { v -> AppConfig.aiTemperature = v }
+                    },
+                    label = { Text("Temperature (-1=默认, 0.0~2.0)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = maxTok,
+                    onValueChange = {
+                        maxTok = it
+                        it.toIntOrNull()?.let { v -> AppConfig.aiMaxTokens = v }
+                    },
+                    label = { Text("Max Tokens (0=默认)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = sysPrompt,
+                    onValueChange = {
+                        sysPrompt = it
+                        AppConfig.aiGlobalSystemPrompt = it
+                    },
+                    label = { Text("全局 System Prompt 前缀") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Agent 模式默认开启", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    Switch(checked = agentDefault, onCheckedChange = {
+                        agentDefault = it
+                        AppConfig.aiAgentModeDefault = it
+                    })
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("聊天记录持久化", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    Switch(checked = persist, onCheckedChange = {
+                        persist = it
+                        AppConfig.aiChatPersist = it
+                    })
+                }
+            }
+        }
     }
 }
 

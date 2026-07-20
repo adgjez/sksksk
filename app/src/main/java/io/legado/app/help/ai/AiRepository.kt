@@ -5,12 +5,24 @@ import io.legado.app.data.entities.AiConversation
 import io.legado.app.data.entities.AiImage
 import io.legado.app.data.entities.AiMessage
 import io.legado.app.data.entities.AiProvider
+import io.legado.app.help.config.AppConfig
 import java.util.UUID
 
 /**
  * AI 仓库：把 service（HTTP）和 DAO（Room）合成一个上层 API。
+ * 根据 Provider 类型自动选择对应的 Service 实现。
  */
-class AiRepository(private val service: AiService = OpenAiService()) {
+class AiRepository(
+    private val defaultService: AiService = OpenAiService(),
+    private val anthropicService: AiService = AnthropicService(),
+) {
+
+    private fun serviceFor(provider: AiProvider): AiService =
+        if (provider.type == AiProvider.TYPE_ANTHROPIC) anthropicService else defaultService
+
+    private fun globalTemp(): Double = AppConfig.aiTemperature.let { if (it < 0) 0.7 else it.toDouble() }
+    private fun globalMaxTokens(): Int = AppConfig.aiMaxTokens.let { if (it <= 0) 2048 else it }
+    private fun globalSystemPrefix(): String = AppConfig.aiGlobalSystemPrompt
 
     fun listProviders() = appDb.aiProviderDao.all()
     fun listEnabledProviders() = appDb.aiProviderDao.enabled()
@@ -18,7 +30,7 @@ class AiRepository(private val service: AiService = OpenAiService()) {
     fun saveProvider(p: AiProvider) = appDb.aiProviderDao.upsert(p)
     fun deleteProvider(id: String) = appDb.aiProviderDao.delete(id)
 
-    suspend fun testProvider(p: AiProvider): Result<Unit> = service.testConnection(p)
+    suspend fun testProvider(p: AiProvider): Result<Unit> = serviceFor(p).testConnection(p)
 
     fun listConversations() = appDb.aiConversationDao.all()
     fun getConversation(id: String) = appDb.aiConversationDao.get(id)
@@ -49,7 +61,8 @@ class AiRepository(private val service: AiService = OpenAiService()) {
         saveMessage(userMsg)
 
         val history = messagesOf(conversationId)
-        return service.chat(provider, systemPrompt, history).map { result ->
+        val fullSystem = globalSystemPrefix().let { if (it.isBlank()) systemPrompt else "$it\n\n$systemPrompt" }
+        return serviceFor(provider).chat(provider, fullSystem, history, temperature = globalTemp(), maxTokens = globalMaxTokens()).map { result ->
             val assistantMsg = AiMessage(
                 id = UUID.randomUUID().toString(),
                 conversationId = conversationId,
@@ -81,7 +94,8 @@ class AiRepository(private val service: AiService = OpenAiService()) {
         )
         saveMessage(userMsg)
         val history = messagesOf(conversationId)
-        service.chatStream(provider, systemPrompt, history, tools = emptyList(), stream = stream)
+        val fullSystem = globalSystemPrefix().let { if (it.isBlank()) systemPrompt else "$it\n\n$systemPrompt" }
+        serviceFor(provider).chatStream(provider, fullSystem, history, tools = emptyList(), stream = stream, temperature = globalTemp(), maxTokens = globalMaxTokens())
     }
 
     suspend fun generateImage(
@@ -89,7 +103,7 @@ class AiRepository(private val service: AiService = OpenAiService()) {
         prompt: String,
         size: String = "1024x1024",
     ): Result<List<AiImage>> {
-        return service.generateImage(provider, prompt, size, n = 1).map { paths ->
+        return serviceFor(provider).generateImage(provider, prompt, size, n = 1).map { paths ->
             paths.map { p ->
                 val img = AiImage(
                     id = UUID.randomUUID().toString(),

@@ -326,4 +326,16 @@ object PreferKey {
     const val readingReminderInterval = "readingReminderInterval"
     /** 阅读提醒：上次提醒时间戳 */
     const val lastReminderTime = "lastReminderTime"
+
+    // ===== AI 全局配置 =====
+    /** AI 默认 Temperature（0.0 - 2.0），-1 表示使用 Provider 默认值 */
+    const val aiTemperature = "aiTemperature"
+    /** AI 默认 MaxTokens，0 表示使用 Provider 默认值 */
+    const val aiMaxTokens = "aiMaxTokens"
+    /** AI 全局 System Prompt 前缀，会拼接到每个会话的 systemPrompt 之前 */
+    const val aiGlobalSystemPrompt = "aiGlobalSystemPrompt"
+    /** AI Agent 模式是否默认开启 */
+    const val aiAgentModeDefault = "aiAgentModeDefault"
+    /** AI 聊天记录是否持久化（true=Room 持久化, false=内存） */
+    const val aiChatPersist = "aiChatPersist"
 }

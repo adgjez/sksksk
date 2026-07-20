@@ -1,5 +1,7 @@
 package io.legado.app.ui.main.ai
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +19,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Stream
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.legado.app.data.entities.AiMessage
+import io.legado.app.help.ai.agent.ToolCallLog
 import kotlinx.coroutines.launch
 
 @Composable
@@ -47,8 +58,9 @@ fun AiChatScreen(vm: AiChatViewModel = viewModel()) {
     val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf("") }
 
-    LaunchedEffect(state.messages.size) {
-        if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.size - 1)
+    LaunchedEffect(state.messages.size, state.streaming) {
+        val totalItems = state.messages.size + (if (state.streaming != null) 1 else 0)
+        if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -57,6 +69,73 @@ fun AiChatScreen(vm: AiChatViewModel = viewModel()) {
             return@Column
         }
 
+        // Top bar: conversation switch + agent mode toggle
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { vm.toggleConversationList() }) {
+                Icon(Icons.Filled.List, contentDescription = "会话列表")
+            }
+            Text(
+                text = state.conversation?.title ?: "新会话",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { vm.newConversation() }) {
+                Icon(Icons.Filled.Add, contentDescription = "新会话")
+            }
+            IconButton(onClick = { vm.toggleAgentMode() }) {
+                Icon(
+                    if (state.agentMode) Icons.Filled.AutoAwesome else Icons.Filled.Stream,
+                    contentDescription = if (state.agentMode) "Agent 模式" else "流式模式",
+                    tint = if (state.agentMode) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+
+        // Conversation list drawer
+        AnimatedVisibility(visible = state.showConversationList) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(state.conversations, key = { it.id }) { conv ->
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = if (conv.id == state.conversation?.id)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth().clickable { vm.switchConversation(conv) },
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = conv.title.ifBlank { "新会话" },
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            IconButton(
+                                onClick = { vm.deleteConversation(conv) },
+                                modifier = Modifier.padding(0.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "删除会话",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(0.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Messages
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -64,20 +143,39 @@ fun AiChatScreen(vm: AiChatViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (state.messages.isEmpty() && !state.sending) {
-                item { EmptyHint("开始聊天", "输入消息，按下右箭头发送。") }
+                item { EmptyHint("开始聊天", "输入消息，按下右箭头发送。\nAgent 模式支持工具调用。") }
             }
             items(state.messages, key = { it.id }) { m -> MessageBubble(m) }
             state.streaming?.let { stream ->
-                item { MessageBubble(AiMessage(id = "_stream", role = AiMessage.ROLE_ASSISTANT, content = stream)) }
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (state.sending && stream.length < 20) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.padding(end = 8.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        }
+                        MessageBubble(
+                            AiMessage(id = "_stream", role = AiMessage.ROLE_ASSISTANT, content = stream)
+                        )
+                    }
+                }
             }
         }
 
+        // Tool log
+        if (state.toolLog.isNotEmpty()) {
+            ToolLogSection(state.toolLog)
+        }
+
+        // Error
         state.error?.let { err ->
             Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
                 Text(text = err, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer)
             }
         }
 
+        // Input
         Surface(tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -101,6 +199,42 @@ fun AiChatScreen(vm: AiChatViewModel = viewModel()) {
                     },
                     enabled = !state.sending && input.isNotBlank()
                 ) { Icon(Icons.Filled.Send, contentDescription = "发送") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolLogSection(toolLog: List<ToolCallLog>) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(0.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Text(
+                text = "工具调用 (${toolLog.size})",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            toolLog.takeLast(5).forEach { log ->
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                    Text(
+                        text = log.call.name,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (log.result.isError) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.widthIn(max = 120.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = log.result.content.take(80) + if (log.result.content.length > 80) "…" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
