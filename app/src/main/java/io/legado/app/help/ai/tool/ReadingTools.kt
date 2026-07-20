@@ -109,7 +109,7 @@ class SearchBooksTool : AiTool {
         val matched = books.filter { b ->
             b.name.lowercase().contains(kw) ||
             b.author.lowercase().contains(kw) ||
-            b.introduce.orEmpty().lowercase().contains(kw)
+            b.intro.orEmpty().lowercase().contains(kw)
         }.take(limit)
         if (matched.isEmpty()) return AiToolResult("(no books found for '$keyword')")
         val text = matched.joinToString("\n") { b ->
