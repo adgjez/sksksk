@@ -162,6 +162,16 @@ class SkillRegistry(
      * 通用更新：builtin skill 存为 custom（覆盖），非 builtin 直接 saveCustom。
      * 这样 builtin 也能被 evaluate / recordUsage 修改状态。
      */
+    fun saveSkill(skill: Skill): Result<Skill> = runCatching {
+        val existing = byName(skill.name)
+        if (existing == null) {
+            createSkill(skill).getOrThrow()
+        } else {
+            updateSkill(skill)
+            skill
+        }
+    }
+
     private fun updateSkill(skill: Skill) {
         val list = customSkills().toMutableList()
         val idx = list.indexOfFirst { it.name == skill.name }

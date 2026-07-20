@@ -216,8 +216,8 @@ class ReadChapterContextTool(
     private val bookUrl: String,
     private val chapterIndex: Int,
 ) : AiTool {
-    override val name = "read_chapter"
-    override val description = "读取当前书的指定章节正文。"
+    override val name = "read_current_chapter"
+    override val description = "读取当前书指定章节正文（自动填入 bookUrl，chapterIndex 传 -1 表示当前章节）。"
     override val parametersSchema = """
         {"type":"object","properties":{
           "chapterIndex":{"type":"integer","default":-1,"description":"-1 表示当前章节"},

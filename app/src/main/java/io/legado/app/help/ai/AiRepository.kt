@@ -35,7 +35,11 @@ class AiRepository(
     fun listConversations() = appDb.aiConversationDao.all()
     fun getConversation(id: String) = appDb.aiConversationDao.get(id)
     fun saveConversation(c: AiConversation) = appDb.aiConversationDao.upsert(c)
-    fun deleteConversation(id: String) = appDb.aiConversationDao.delete(id)
+    fun deleteConversation(id: String) {
+        appDb.aiConversationDao.deleteMessages(id)
+        appDb.aiConversationDao.delete(id)
+    }
+    fun conversationsByProvider(providerId: String) = appDb.aiConversationDao.byProvider(providerId)
 
     fun messagesOf(conversationId: String) = appDb.aiConversationDao.messages(conversationId)
     fun saveMessage(m: AiMessage) = appDb.aiConversationDao.upsertMessage(m)

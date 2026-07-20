@@ -98,11 +98,12 @@ class Agent(
                         )
                     }
                     // Tell the model about the error and let it try again
+                    // Use role=user instead of system because Claude discards mid-conversation system messages
                     working.add(AiMessage(
                         id = UUID.randomUUID().toString(),
                         conversationId = working.lastOrNull()?.conversationId.orEmpty(),
-                        role = "system",
-                        content = "API error: ${t.message}. Please try a different approach.",
+                        role = "user",
+                        content = "[system notice] API error: ${t.message}. Please try a different approach.",
                     ))
                     continue
                 }
@@ -142,7 +143,8 @@ class Agent(
                         executeToolWithTimeout(tool, call.arguments)
                     }
                     toolLog.add(ToolCallLog(call = call, result = toolResult))
-                    working.add(toolResult.toMessage(call.id, working.last().conversationId))
+                    val convId = assistantMsg.conversationId
+                    working.add(toolResult.toMessage(call.id, convId))
                 }
             }
 

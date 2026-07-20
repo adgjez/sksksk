@@ -15,6 +15,9 @@ interface AiConversationDao {
     @Query("SELECT * FROM ai_conversations WHERE id = :id")
     fun get(id: String): AiConversation?
 
+    @Query("SELECT * FROM ai_conversations WHERE providerId = :providerId ORDER BY updatedAt DESC")
+    fun byProvider(providerId: String): List<AiConversation>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun upsert(conversation: AiConversation)
 

@@ -46,6 +46,22 @@ class AiSettingsViewModel(
     }
 
     fun save(p: AiProvider) {
+        if (p.name.isBlank()) {
+            _state.update { it.copy(testResult = "✗ 名称不能为空") }
+            return
+        }
+        if (p.baseUrl.isBlank()) {
+            _state.update { it.copy(testResult = "✗ API URL 不能为空") }
+            return
+        }
+        if (p.apiKey.isBlank()) {
+            _state.update { it.copy(testResult = "✗ API Key 不能为空") }
+            return
+        }
+        if (p.model.isBlank()) {
+            _state.update { it.copy(testResult = "✗ 模型名不能为空") }
+            return
+        }
         viewModelScope.launch {
             repo.saveProvider(p)
             _state.update { it.copy(editing = null, providers = repo.listProviders()) }

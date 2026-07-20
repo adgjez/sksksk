@@ -79,6 +79,7 @@ data class SkillManagerState(
     val skills: List<Skill> = emptyList(),
     val editing: Skill? = null,
     val ratingFor: Skill? = null,
+    val editError: String? = null,
 )
 
 class SkillManagerViewModel : ViewModel() {
@@ -99,13 +100,17 @@ class SkillManagerViewModel : ViewModel() {
         refresh()
     }
 
-    fun startEdit(skill: Skill) = _state.update { it.copy(editing = skill) }
-    fun cancelEdit() = _state.update { it.copy(editing = null) }
+    fun startEdit(skill: Skill) = _state.update { it.copy(editing = skill, editError = null) }
+    fun cancelEdit() = _state.update { it.copy(editing = null, editError = null) }
 
     fun save(skill: Skill) = viewModelScope.launch {
-        skills.createSkill(skill.copy(origin = Skill.ORIGIN_USER))
-        cancelEdit()
-        refresh()
+        val result = skills.saveSkill(skill.copy(origin = Skill.ORIGIN_USER))
+        result.onSuccess {
+            cancelEdit()
+            refresh()
+        }.onFailure { t ->
+            _state.update { it.copy(editError = t.message ?: t.javaClass.simpleName) }
+        }
     }
 
     fun startRating(skill: Skill) = _state.update { it.copy(ratingFor = skill) }
