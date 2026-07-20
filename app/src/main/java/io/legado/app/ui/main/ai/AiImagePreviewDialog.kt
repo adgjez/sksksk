@@ -3,7 +3,11 @@ package io.legado.app.ui.main.ai
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,7 +21,11 @@ import java.io.File
 
 @OptIn(ExperimentalGlideComposeApi::class)
 @Composable
-fun AiImagePreviewDialog(img: AiImage, onDismiss: () -> Unit) {
+fun AiImagePreviewDialog(
+    img: AiImage,
+    onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("图片") },
@@ -31,6 +39,13 @@ fun AiImagePreviewDialog(img: AiImage, onDismiss: () -> Unit) {
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        dismissButton = {
+            if (onDelete != null) {
+                IconButton(onClick = { onDelete(); onDismiss() }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "删除")
+                }
+            }
+        }
     )
 }

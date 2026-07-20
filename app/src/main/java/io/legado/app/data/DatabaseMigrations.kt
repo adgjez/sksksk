@@ -780,6 +780,9 @@ object DatabaseMigrations {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_memories_scope` ON `ai_memories` (`scope`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_memories_bookKey` ON `ai_memories` (`bookKey`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_memories_importance` ON `ai_memories` (`importance`)")
+            // AiMessage 新增 toolCallId + toolCallsJson 列
+            db.execSQL("ALTER TABLE ai_messages ADD COLUMN toolCallId TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE ai_messages ADD COLUMN toolCallsJson TEXT NOT NULL DEFAULT ''")
         }
     }
 

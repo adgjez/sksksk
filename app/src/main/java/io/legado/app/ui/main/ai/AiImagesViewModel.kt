@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class AiImagesUiState(
     val images: List<AiImage> = emptyList(),
@@ -61,5 +62,13 @@ class AiImagesViewModel(
 
     fun clearError() {
         _state.update { it.copy(error = null, success = null) }
+    }
+
+    fun deleteImage(img: AiImage) {
+        viewModelScope.launch {
+            runCatching { File(img.localPath).delete() }
+            repo.deleteImage(img.id)
+            _state.update { it.copy(images = it.images.filterNot { i -> i.id == img.id }) }
+        }
     }
 }

@@ -86,13 +86,7 @@ class AiRepository(
         systemPrompt: String = "你是一个有帮助的助手。",
         stream: ChatStream,
     ) {
-        val userMsg = AiMessage(
-            id = UUID.randomUUID().toString(),
-            conversationId = conversationId,
-            role = AiMessage.ROLE_USER,
-            content = userText
-        )
-        saveMessage(userMsg)
+        // 用户消息由调用方（ViewModel）保存，这里不再重复保存
         val history = messagesOf(conversationId)
         val fullSystem = globalSystemPrefix().let { if (it.isBlank()) systemPrompt else "$it\n\n$systemPrompt" }
         serviceFor(provider).chatStream(provider, fullSystem, history, tools = emptyList(), stream = stream, temperature = globalTemp(), maxTokens = globalMaxTokens())

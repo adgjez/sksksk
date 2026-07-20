@@ -245,10 +245,34 @@ class AnthropicService : AiService {
                         put("role", "user")
                         put("content", JSONArray().put(JSONObject().apply {
                             put("type", "tool_result")
-                            put("tool_use_id", m.content.takeWhile { it != ' ' }.ifBlank { "unknown" })
+                            put("tool_use_id", m.toolCallId.ifBlank { "unknown" })
                             put("content", m.content)
                         }))
                     })
+                }
+                "assistant" -> {
+                    val msgObj = JSONObject().put("role", "assistant")
+                    if (m.toolCallsJson.isNotBlank()) {
+                        // assistant 消息含 tool_use blocks
+                        val contentArr = JSONArray()
+                        if (m.content.isNotBlank()) {
+                            contentArr.put(JSONObject().put("type", "text").put("text", m.content))
+                        }
+                        val callsArr = JSONArray(m.toolCallsJson)
+                        for (i in 0 until callsArr.length()) {
+                            val call = callsArr.getJSONObject(i)
+                            contentArr.put(JSONObject().apply {
+                                put("type", "tool_use")
+                                put("id", call.optString("id"))
+                                put("name", call.optString("name"))
+                                put("input", call.optJSONObject("arguments") ?: JSONObject())
+                            })
+                        }
+                        msgObj.put("content", contentArr)
+                    } else {
+                        msgObj.put("content", m.content)
+                    }
+                    msgArr.put(msgObj)
                 }
                 else -> {
                     msgArr.put(JSONObject().put("role", m.role).put("content", m.content))

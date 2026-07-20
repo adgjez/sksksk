@@ -166,7 +166,11 @@ fun AiImagesScreen(vm: AiImagesViewModel = viewModel()) {
     }
 
     selected?.let { img ->
-        AiImagePreviewDialog(img = img, onDismiss = { selected = null })
+        AiImagePreviewDialog(
+            img = img,
+            onDismiss = { selected = null },
+            onDelete = { vm.deleteImage(img) },
+        )
     }
 }
 

@@ -120,7 +120,7 @@ class SkillRegistry(
             ratingCount = 0,
             lastEvaluation = "evolved: $reason",
         )
-        saveCustom(evolved)
+        updateSkill(evolved)
         evolved
     }
 
@@ -147,16 +147,26 @@ class SkillRegistry(
             lastUsed = System.currentTimeMillis(),
             lastEvaluation = "rating=$rating avg=%.2f: %s".format(avg, comment.take(200)),
         )
-        saveCustom(evaluated)
+        updateSkill(evaluated)
         evaluated
     }
 
     /** 每次使用 +1。不改 status。 */
     fun recordUsage(name: String) {
         val s = byName(name) ?: return
-        if (s.origin == Skill.ORIGIN_BUILTIN) return  // 内置的 useCount 暂不持久化
         val updated = s.copy(useCount = s.useCount + 1, lastUsed = System.currentTimeMillis())
-        saveCustom(updated)
+        updateSkill(updated)
+    }
+
+    /**
+     * 通用更新：builtin skill 存为 custom（覆盖），非 builtin 直接 saveCustom。
+     * 这样 builtin 也能被 evaluate / recordUsage 修改状态。
+     */
+    private fun updateSkill(skill: Skill) {
+        val list = customSkills().toMutableList()
+        val idx = list.indexOfFirst { it.name == skill.name }
+        if (idx >= 0) list[idx] = skill else list.add(skill)
+        prefs.edit().putString(KEY_CUSTOM, serialize(list)).apply()
     }
 
     // --- 持久化辅助 ---

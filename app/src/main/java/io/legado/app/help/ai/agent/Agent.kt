@@ -124,6 +124,9 @@ class Agent(
                     conversationId = working.lastOrNull()?.conversationId.orEmpty(),
                     role = "assistant",
                     content = result.content,
+                    toolCallsJson = if (result.toolCalls.isNotEmpty()) {
+                        io.legado.app.utils.GSON.toJson(result.toolCalls)
+                    } else ""
                 )
                 working.add(assistantMsg)
 
@@ -173,7 +176,9 @@ class Agent(
             lastError = result.exceptionOrNull()
             // Don't retry on client errors (4xx except 429)
             val msg = lastError?.message.orEmpty()
-            if (msg.contains("40") && !msg.contains("429") && !msg.contains("429")) {
+            val isRateLimit = msg.contains("429")
+            val isClientError = msg.contains(" 4") && !isRateLimit
+            if (isClientError) {
                 throw lastError!!
             }
             if (attempt < maxRetries) {
@@ -271,5 +276,6 @@ data class AiToolCallResult(
         conversationId = conversationId,
         role = "tool",
         content = if (isError) "[error] $content" else content,
+        toolCallId = callId,
     )
 }

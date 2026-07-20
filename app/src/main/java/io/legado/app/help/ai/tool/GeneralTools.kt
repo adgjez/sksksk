@@ -31,8 +31,14 @@ class ListChaptersTool : AiTool {
         val filtered = if (search.isBlank()) chapters
                        else chapters.filter { it.title.lowercase().contains(search) }
         if (filtered.isEmpty()) return AiToolResult("(no chapters)")
-        val text = filtered.take(50).joinToString("\n") { "[${it.index}] ${it.title}" }
-        return AiToolResult(text)
+        val total = filtered.size
+        val truncated = filtered.take(50)
+        val text = truncated.joinToString("\n") { "[${it.index}] ${it.title}" }
+        return if (total > 50) {
+            AiToolResult("$text\n\n(showing 50 of $total chapters. Use search to filter.)")
+        } else {
+            AiToolResult(text)
+        }
     }
 }
 
@@ -60,7 +66,11 @@ class SearchInBookTool : AiTool {
             appDb.bookDao.all.map { it.bookUrl }
         }
         val hits = mutableListOf<String>()
+        var booksScanned = 0
+        val maxBooksScan = 20  // 防止扫描过多书籍导致超时
         for (url in books) {
+            if (booksScanned >= maxBooksScan) break
+            booksScanned++
             val chapters = appDb.bookChapterDao.getChapterList(url)
             for (c in chapters) {
                 if (hits.size >= maxHits) break
@@ -75,8 +85,11 @@ class SearchInBookTool : AiTool {
             }
             if (hits.size >= maxHits) break
         }
-        return if (hits.isEmpty()) AiToolResult("(no hits)")
-               else AiToolResult(hits.joinToString("\n\n"))
+        return if (hits.isEmpty()) {
+            AiToolResult("(no hits${if (booksScanned >= maxBooksScan) " (scanned first $maxBooksScan books)" else ""})")
+        } else {
+            AiToolResult(hits.joinToString("\n\n"))
+        }
     }
 }
 

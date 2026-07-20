@@ -33,14 +33,25 @@ class AnalyzeCharactersTool : AiTool {
     """.trimIndent()
 
     override suspend fun execute(arguments: Map<String, Any?>): AiToolResult {
-        val paragraphs = arguments["paragraphs"] as? JSONArray
+        @Suppress("UNCHECKED_CAST")
+        val paragraphs = (arguments["paragraphs"] as? List<*>)?.mapNotNull { it?.toString() }
             ?: return AiToolResult("missing 'paragraphs'", isError = true)
-        // 工具本身不做 AI 推断；实际由 Agent 在 chat 阶段让 LLM 推断后调用此工具。
-        // 这里的 execute 是占位 - 真实流程：Agent.chat 返回时如果包含 tool_call(name=analyze_characters)，
-        // 我们已经拿到了 paragraphs 列表,可以直接让 LLM 写回 assignments。
-        // 本工具返回的"未实现"是为了让 Agent 走 read_chapter 路径，结构化输出段落分配。
-        val count = paragraphs.length()
-        return AiToolResult("call analyze_characters via chat completion with paragraph assignment format")
+        if (paragraphs.isEmpty()) return AiToolResult("paragraphs is empty", isError = true)
+
+        @Suppress("UNCHECKED_CAST")
+        val voices = (arguments["availableVoices"] as? List<*>)?.mapNotNull { it?.toString() }
+            ?: listOf("zh-CN-XiaoxiaoNeural", "zh-CN-YunxiNeural", "zh-CN-YunyangNeural")
+
+        // 返回结构化的段落列表，供 Agent 在后续 chat 中输出角色分配 JSON
+        val sb = StringBuilder()
+        sb.append("待分析段落（共 ${paragraphs.size} 段）：\n")
+        paragraphs.forEachIndexed { i, p ->
+            sb.append("[$i] ${p.take(200)}\n")
+        }
+        sb.append("\n可选音色：${voices.joinToString(", ")}\n")
+        sb.append("请输出 JSON 数组 [{paragraph:int, character:str, voice:str, text:str}]，")
+        sb.append("character 为角色名（旁白用\"旁白\"），voice 从可选音色中选，text 为该段原文。\n")
+        return AiToolResult(sb.toString())
     }
 }
 

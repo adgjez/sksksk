@@ -40,9 +40,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.legado.app.help.ai.agent.Agent
 import io.legado.app.help.ai.skill.SkillRegistry
-import io.legado.app.help.ai.tool.AiTool
-import io.legado.app.help.ai.tool.FetchHtmlTool
-import io.legado.app.help.ai.tool.SaveBookSourceTool
 import io.legado.app.ui.theme.AppTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -98,8 +95,9 @@ class BookSourceGeneratorViewModel : ViewModel() {
             return@launch
         }
         val skills = SkillRegistry.instance
-        // 激活 skill
-        skills.activate("generate_book_source")
+        // 临时激活 skill，结束后停用
+        val wasActive = skills.isActive("generate_book_source")
+        if (!wasActive) skills.activate("generate_book_source")
 
         val systemPrompt = """
             你的任务：为用户给的网站生成一个 Legado (阅读) 兼容的 BookSource JSON。
@@ -118,11 +116,11 @@ class BookSourceGeneratorViewModel : ViewModel() {
             role = io.legado.app.data.entities.AiMessage.ROLE_USER,
             content = "请为这个网站生成书源：${s.url}，书源名 ${s.sourceName}，示例搜索词 ${s.sampleKeyword}",
         )
-        val tools: List<AiTool> = listOf(FetchHtmlTool(), SaveBookSourceTool())
+        // FetchHtmlTool / SaveBookSourceTool 已在 Agent.getDefaultTools() 中，不再重复传入
         val agent = Agent()
-        val r = agent.run(provider, systemPrompt, listOf(userMsg), tools)
+        val r = agent.run(provider, systemPrompt, listOf(userMsg), extraTools = emptyList())
         r.onSuccess { ar ->
-            val log = ar.toolLog.map { tl -> "→ ${tl.call.name}(${tl.call.arguments.entries.joinToString { "${it.key}=${it.value}" }}) → ${tl.result.content.take(120)}" }
+            val log = ar.toolLog.map { tl -> "-> ${tl.call.name}(${tl.call.arguments.entries.joinToString { "${it.key}=${it.value}" }}) -> ${tl.result.content.take(120)}" }
             _state.update {
                 it.copy(
                     running = false,
@@ -133,6 +131,8 @@ class BookSourceGeneratorViewModel : ViewModel() {
         }.onFailure { t ->
             _state.update { it.copy(running = false, error = t.message ?: t.javaClass.simpleName) }
         }
+        // 结束后停用临时激活的 skill
+        if (!wasActive) skills.deactivate("generate_book_source")
     }
 }
 

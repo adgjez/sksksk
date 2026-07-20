@@ -202,7 +202,42 @@ class OpenAiService : AiService {
             arr.put(JSONObject().put("role", "system").put("content", systemPrompt))
         }
         for (m in messages) {
-            arr.put(JSONObject().put("role", m.role).put("content", m.content))
+            val msgObj = JSONObject().put("role", m.role)
+            when (m.role) {
+                "tool" -> {
+                    msgObj.put("content", m.content)
+                    if (m.toolCallId.isNotBlank()) {
+                        msgObj.put("tool_call_id", m.toolCallId)
+                    }
+                }
+                "assistant" -> {
+                    msgObj.put("content", m.content)
+                    if (m.toolCallsJson.isNotBlank()) {
+                        // 从存储的 JSON 恢复 tool_calls 数组
+                        runCatching {
+                            val callsArr = JSONArray(m.toolCallsJson)
+                            val tcArr = JSONArray()
+                            for (i in 0 until callsArr.length()) {
+                                val call = callsArr.getJSONObject(i)
+                                val fn = JSONObject().apply {
+                                    put("name", call.optString("name"))
+                                    put("arguments", call.optJSONObject("arguments")?.toString() ?: "{}")
+                                }
+                                tcArr.put(JSONObject().apply {
+                                    put("id", call.optString("id"))
+                                    put("type", "function")
+                                    put("function", fn)
+                                })
+                            }
+                            if (tcArr.length() > 0) msgObj.put("tool_calls", tcArr)
+                        }
+                    }
+                }
+                else -> {
+                    msgObj.put("content", m.content)
+                }
+            }
+            arr.put(msgObj)
         }
         return JSONObject().apply {
             put("model", provider.model)
