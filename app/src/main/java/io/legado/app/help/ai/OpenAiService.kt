@@ -166,7 +166,7 @@ class OpenAiService : AiService {
                 }
                 val data = JSONObject(resp.body!!.string())
                 val arr = data.getJSONArray("data")
-                val outDir = File(appCtx.cacheDir, "ai_images").apply { mkdirs() }
+                val outDir = File(appCtx.filesDir, "ai_images").apply { mkdirs() }
                 val paths = mutableListOf<String>()
                 for (i in 0 until arr.length()) {
                     val url = arr.getJSONObject(i).optString("url", "")

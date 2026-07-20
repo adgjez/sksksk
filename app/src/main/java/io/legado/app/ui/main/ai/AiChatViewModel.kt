@@ -145,7 +145,9 @@ class AiChatViewModel(
                 role = AiMessage.ROLE_USER,
                 content = text,
             )
-            repo.saveMessage(userMsg)
+            if (io.legado.app.help.config.AppConfig.aiChatPersist) {
+                repo.saveMessage(userMsg)
+            }
             _state.update { it.copy(messages = it.messages + userMsg) }
 
             if (_state.value.agentMode) {
@@ -175,8 +177,10 @@ class AiChatViewModel(
                 role = AiMessage.ROLE_ASSISTANT,
                 content = agentResult.finalText,
             )
-            repo.saveMessage(assistant)
-            repo.saveConversation(conversation.copy(updatedAt = System.currentTimeMillis()))
+            if (io.legado.app.help.config.AppConfig.aiChatPersist) {
+                repo.saveMessage(assistant)
+                repo.saveConversation(conversation.copy(updatedAt = System.currentTimeMillis()))
+            }
             _state.update {
                 it.copy(
                     messages = it.messages + assistant,
@@ -222,8 +226,10 @@ class AiChatViewModel(
                     completionTokens = result.completionTokens,
                 )
                 viewModelScope.launch {
-                    repo.saveMessage(assistant)
-                    repo.saveConversation(conversation.copy(updatedAt = System.currentTimeMillis()))
+                    if (io.legado.app.help.config.AppConfig.aiChatPersist) {
+                        repo.saveMessage(assistant)
+                        repo.saveConversation(conversation.copy(updatedAt = System.currentTimeMillis()))
+                    }
                     _state.update {
                         it.copy(messages = it.messages + assistant, streaming = null, sending = false)
                     }

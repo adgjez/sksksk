@@ -6,11 +6,13 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -20,8 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import io.legado.app.ui.theme.AppTheme
@@ -31,7 +34,7 @@ class AiActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             AppTheme {
-                AiRoot()
+                AiRoot(onBack = { finish() })
             }
         }
     }
@@ -45,16 +48,27 @@ private enum class AiTab(val label: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AiRoot() {
-    var current by remember { mutableStateOf(AiTab.Chat) }
+private fun AiRoot(onBack: () -> Unit) {
+    // rememberSaveable 让 tab 选择在屏幕旋转 / 进程恢复后保持
+    var currentOrdinal by rememberSaveable { mutableIntStateOf(AiTab.Chat.ordinal) }
+    val current = AiTab.entries.getOrElse(currentOrdinal) { AiTab.Chat }
     Scaffold(
-        topBar = { TopAppBar(title = { Text("AI · ${current.label}") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("AI · ${current.label}") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                }
+            )
+        },
         bottomBar = {
             NavigationBar {
                 AiTab.entries.forEach { tab ->
                     NavigationBarItem(
                         selected = current == tab,
-                        onClick = { current = tab },
+                        onClick = { currentOrdinal = tab.ordinal },
                         icon = {
                             Icon(
                                 imageVector = when (tab) {

@@ -3,7 +3,6 @@ package io.legado.app.help.ai.tool
 import io.legado.app.data.appDb
 import io.legado.app.help.ai.memory.AiMemoryEntry
 import io.legado.app.help.ai.memory.AiMemoryStore
-import io.legado.app.utils.LogUtils
 import okhttp3.Request
 import io.legado.app.help.http.okHttpClient
 import org.json.JSONObject

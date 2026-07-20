@@ -75,7 +75,12 @@ class FetchHtmlTool : AiTool {
             builder.post(body.toRequestBody(contentType.toMediaTypeOrNull()))
         }
 
-        okHttpClient.newCall(builder.build()).execute().use { resp ->
+        // Build a per-request client with the specified timeout
+        val client = okHttpClient.newBuilder()
+            .callTimeout(timeoutMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+            .build()
+
+        client.newCall(builder.build()).execute().use { resp ->
             if (!resp.isSuccessful) {
                 return@runCatching AiToolResult(
                     "HTTP ${resp.code} ${resp.message}\nfinalUrl=${resp.request.url}",

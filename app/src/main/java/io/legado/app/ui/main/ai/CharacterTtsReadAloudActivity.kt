@@ -242,7 +242,3 @@ private fun CharacterTtsScreen(
         }
     }
 }
-
-private suspend fun speakWithVoice(text: String, voice: String) {
-    // 已迁移到 CharacterTtsPlayer.play
-}

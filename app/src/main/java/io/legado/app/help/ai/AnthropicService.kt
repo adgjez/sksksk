@@ -146,6 +146,7 @@ class AnthropicService : AiService {
                                     }
                                 }
                                 "message_stop" -> {
+                                    completed = true
                                     stream.onDelta("", isFinal = true)
                                     val toolCalls = toolCallBuffers.values.map { buf ->
                                         val argsRaw = buf.optString("input_str").ifBlank { "{}" }
@@ -163,8 +164,13 @@ class AnthropicService : AiService {
                             }
                         }
                     }
+                    private var completed = false
                     override fun onClosed(eventSource: EventSource) {
-                        // onComplete is called in message_stop
+                        // 如果 message_stop 没收到（连接被中断），确保 onComplete 被调用
+                        if (!completed && accumulated.isNotEmpty()) {
+                            completed = true
+                            stream.onComplete(ChatResult(content = accumulated.toString()))
+                        }
                     }
                     override fun onFailure(eventSource: EventSource, t: Throwable?, response: okhttp3.Response?) {
                         stream.onError(t ?: RuntimeException("SSE failed: ${response?.code}"))
@@ -203,7 +209,7 @@ class AnthropicService : AiService {
                 }
                 val data = JSONObject(resp.body!!.string())
                 val arr = data.getJSONArray("data")
-                val outDir = File(appCtx.cacheDir, "ai_images").apply { mkdirs() }
+                val outDir = File(appCtx.filesDir, "ai_images").apply { mkdirs() }
                 val paths = mutableListOf<String>()
                 for (i in 0 until arr.length()) {
                     val url = arr.getJSONObject(i).optString("url", "")
