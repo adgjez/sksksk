@@ -78,7 +78,9 @@ class Agent(
             val fullSystem = buildSystemPrompt(systemPrompt)
             val working = history.toMutableList()
             val toolLog = mutableListOf<ToolCallLog>()
-            var lastUsage = ChatResult("", 0, 0)
+            var totalPrompt = 0
+            var totalCompletion = 0
+            var lastContent = ""
             var consecutiveErrors = 0
 
             for (step in 1..maxSteps) {
@@ -94,8 +96,8 @@ class Agent(
                             finalText = "[agent stopped: $maxConsecutiveErrors consecutive errors. Last: ${t.message}]",
                             steps = step,
                             toolLog = toolLog,
-                            totalPromptTokens = lastUsage.promptTokens,
-                            totalCompletionTokens = lastUsage.completionTokens,
+                            totalPromptTokens = totalPrompt,
+                            totalCompletionTokens = totalCompletion,
                         )
                     }
                     // Tell the model about the error and let it try again
@@ -108,7 +110,9 @@ class Agent(
                     ))
                     continue
                 }
-                lastUsage = result
+                totalPrompt += result.promptTokens
+                totalCompletion += result.completionTokens
+                lastContent = result.content
                 consecutiveErrors = 0  // reset on success
 
                 if (result.toolCalls.isEmpty()) {
@@ -116,8 +120,8 @@ class Agent(
                         finalText = result.content,
                         steps = step,
                         toolLog = toolLog,
-                        totalPromptTokens = lastUsage.promptTokens,
-                        totalCompletionTokens = lastUsage.completionTokens,
+                        totalPromptTokens = totalPrompt,
+                        totalCompletionTokens = totalCompletion,
                     )
                 }
 
@@ -150,11 +154,11 @@ class Agent(
             }
 
             AgentResult(
-                finalText = lastUsage.content.ifBlank { "[agent stopped at maxSteps=$maxSteps]" },
+                finalText = lastContent.ifBlank { "[agent stopped at maxSteps=$maxSteps]" },
                 steps = maxSteps,
                 toolLog = toolLog,
-                totalPromptTokens = lastUsage.promptTokens,
-                totalCompletionTokens = lastUsage.completionTokens,
+                totalPromptTokens = totalPrompt,
+                totalCompletionTokens = totalCompletion,
             )
         }
     }

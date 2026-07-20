@@ -296,7 +296,8 @@ private fun ProviderEditDialog(
                         "openai" to "OpenAI 兼容",
                         "ollama" to "Ollama",
                         "anthropic" to "Claude",
-                        "gemini" to "Gemini",
+                        // gemini 暂未实现，注释掉避免用户选择后调用失败
+                        // "gemini" to "Gemini",
                     ).forEach { (key, label) ->
                         FilterChip(
                             selected = type == key,

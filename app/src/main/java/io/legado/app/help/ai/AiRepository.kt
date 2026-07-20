@@ -6,6 +6,7 @@ import io.legado.app.data.entities.AiImage
 import io.legado.app.data.entities.AiMessage
 import io.legado.app.data.entities.AiProvider
 import io.legado.app.help.config.AppConfig
+import okhttp3.sse.EventSource
 import java.util.UUID
 
 /**
@@ -19,6 +20,9 @@ class AiRepository(
 
     private fun serviceFor(provider: AiProvider): AiService =
         if (provider.type == AiProvider.TYPE_ANTHROPIC) anthropicService else defaultService
+
+    /** 根据 provider 类型返回对应的 service（供外部直接调用 chat/chatStream）。 */
+    fun getService(provider: AiProvider): AiService = serviceFor(provider)
 
     private fun globalTemp(): Double = AppConfig.aiTemperature.let { if (it < 0) 0.7 else it.toDouble() }
     private fun globalMaxTokens(): Int = AppConfig.aiMaxTokens.let { if (it <= 0) 2048 else it }
@@ -90,8 +94,8 @@ class AiRepository(
         userText: String,
         systemPrompt: String = "你是一个有帮助的助手。",
         stream: ChatStream,
-    ) {
-        askStream(provider, messagesOf(conversationId), systemPrompt, stream)
+    ): EventSource? {
+        return askStream(provider, messagesOf(conversationId), systemPrompt, stream)
     }
 
     suspend fun askStream(
@@ -99,7 +103,7 @@ class AiRepository(
         history: List<AiMessage>,
         systemPrompt: String,
         stream: ChatStream,
-    ) {
+    ): EventSource? {
         val fullSystem = globalSystemPrefix().let { if (it.isBlank()) systemPrompt else "$it\n\n$systemPrompt" }
         serviceFor(provider).chatStream(provider, fullSystem, history, tools = emptyList(), stream = stream, temperature = globalTemp(), maxTokens = globalMaxTokens())
     }

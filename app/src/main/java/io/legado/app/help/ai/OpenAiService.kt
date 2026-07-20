@@ -91,7 +91,7 @@ class OpenAiService : AiService {
         stream: ChatStream,
         temperature: Double,
         maxTokens: Int
-    ) {
+    ): EventSource? {
         val body = buildRequestBody(provider, systemPrompt, messages, tools, temperature, maxTokens, stream = true)
         val request = Request.Builder()
             .url(completionsUrl(provider))
@@ -103,11 +103,8 @@ class OpenAiService : AiService {
 
         withContext(Dispatchers.IO) {
             val accumulated = StringBuilder()
-            // 整个流跑完后，从完整响应里解析 tool_calls
-            // 简化：流里只取 content delta，tool 在 onClosed 时由 caller 重新发起非流式请求拿 tool_calls
-            // 这里用更简单方案：所有 chunk 收集，最后 parse 整个流
             val allChunks = StringBuilder()
-            EventSources.createFactory(okHttpClient)
+            val es = EventSources.createFactory(okHttpClient)
                 .newEventSource(request, object : EventSourceListener() {
                     override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
                         if (data == "[DONE]") return
@@ -127,7 +124,6 @@ class OpenAiService : AiService {
                     }
                     override fun onClosed(eventSource: EventSource) {
                         stream.onDelta("", isFinal = true)
-                        // 从流中所有 chunk 找 tool_calls（最后一个 chunk 通常是完整的）
                         val toolCalls = parseToolCallsFromChunks(allChunks.toString())
                         stream.onComplete(ChatResult(content = accumulated.toString(), toolCalls = toolCalls))
                     }
@@ -135,6 +131,7 @@ class OpenAiService : AiService {
                         stream.onError(t ?: RuntimeException("SSE failed: ${response?.code}"))
                     }
                 })
+            es
         }
     }
 

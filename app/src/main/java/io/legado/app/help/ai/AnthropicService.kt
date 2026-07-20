@@ -96,7 +96,7 @@ class AnthropicService : AiService {
         stream: ChatStream,
         temperature: Double,
         maxTokens: Int
-    ) {
+    ): EventSource? {
         val body = buildRequestBody(provider, systemPrompt, messages, tools, temperature, maxTokens, stream = true)
         val request = Request.Builder()
             .url(messagesUrl(provider))
@@ -110,7 +110,7 @@ class AnthropicService : AiService {
             val accumulated = StringBuilder()
             val toolCallBuffers = mutableMapOf<Int, JSONObject>()
 
-            EventSources.createFactory(okHttpClient)
+            val es = EventSources.createFactory(okHttpClient)
                 .newEventSource(request, object : EventSourceListener() {
                     override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
                         runCatching {
@@ -166,7 +166,6 @@ class AnthropicService : AiService {
                     }
                     private var completed = false
                     override fun onClosed(eventSource: EventSource) {
-                        // 如果 message_stop 没收到（连接被中断），确保 onComplete 被调用
                         if (!completed && accumulated.isNotEmpty()) {
                             completed = true
                             stream.onComplete(ChatResult(content = accumulated.toString()))
@@ -176,6 +175,7 @@ class AnthropicService : AiService {
                         stream.onError(t ?: RuntimeException("SSE failed: ${response?.code}"))
                     }
                 })
+            es
         }
     }
 

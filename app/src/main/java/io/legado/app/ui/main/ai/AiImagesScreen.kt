@@ -143,7 +143,7 @@ fun AiImagesScreen(vm: AiImagesViewModel = viewModel()) {
             }
             LaunchedEffect(msg) {
                 kotlinx.coroutines.delay(2000)
-                vm.clearError()
+                vm.clearSuccess()
             }
         }
 

@@ -1,12 +1,11 @@
 package io.legado.app.help.ai
 
-import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
 import io.legado.app.utils.LogUtils
 import splitties.init.appCtx
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 角色朗读播放器：用 Android 系统 TTS 按 voice 名播每段。
@@ -17,28 +16,34 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object CharacterTtsPlayer {
 
-    private val tts: TextToSpeech? by lazy {
-        val atomic = AtomicBoolean(false)
+    private val ttsRef = AtomicReference<TextToSpeech?>(null)
+    private val initStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** 异步初始化 TTS，不阻塞调用线程。 */
+    private fun ensureInit() {
+        if (ttsRef.get() != null || !initStarted.compareAndSet(false, true)) return
         val tts = TextToSpeech(appCtx) { status ->
-            atomic.set(status == TextToSpeech.SUCCESS)
-            if (!atomic.get()) LogUtils.e("CharacterTtsPlayer", "TTS init failed: $status")
+            if (status == TextToSpeech.SUCCESS) {
+                ttsRef.set(tts)
+            } else {
+                LogUtils.e("CharacterTtsPlayer", "TTS init failed: $status")
+                initStarted.set(false) // 允许重试
+            }
         }
-        // 最多等 1.5 秒 init
-        val deadline = System.currentTimeMillis() + 1500
-        while (!atomic.get() && System.currentTimeMillis() < deadline) {
-            Thread.sleep(50)
-        }
-        tts
+        // 乐观设置：init 回调通常很快，先存上
+        ttsRef.set(tts)
     }
+
+    private val tts: TextToSpeech? get() { ensureInit(); return ttsRef.get() }
 
     /** 把 voice name 解析到已安装的 Android Voice，找不到返回 null。 */
     private fun resolveVoice(name: String): Voice? {
         if (name.isBlank()) return null
-        val voices = tts?.voices ?: return null
+        val engine = tts ?: return null
+        val voices = engine.voices ?: return null
         return voices.firstOrNull { it.name.equals(name, ignoreCase = true) }
             ?: voices.firstOrNull { it.name.contains(name, ignoreCase = true) }
             ?: voices.firstOrNull { v ->
-                // 用 locale+quality 匹配
                 val n = name.lowercase()
                 v.locale.toLanguageTag().lowercase().contains(n.substringBefore("-").lowercase()) &&
                         (v.name.lowercase().contains(n.substringAfterLast('-', "").lowercase()))
@@ -54,7 +59,6 @@ object CharacterTtsPlayer {
         for ((text, voiceName) in segments) {
             if (text.isBlank()) continue
             resolveVoice(voiceName)?.let { engine.voice = it }
-            // QUEUE_ADD 自动接上一段末尾
             engine.speak(text, TextToSpeech.QUEUE_ADD, null, text.hashCode().toString())
         }
     }
@@ -67,6 +71,8 @@ object CharacterTtsPlayer {
     fun shutdown() {
         tts?.stop()
         tts?.shutdown()
+        ttsRef.set(null)
+        initStarted.set(false)
     }
 
     /** 列出本机已装的 voice name（用于 debug / 提示用户装包）。 */

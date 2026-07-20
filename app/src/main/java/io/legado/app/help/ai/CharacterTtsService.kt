@@ -74,7 +74,7 @@ object CharacterTtsService {
             )
         )
 
-        val service: AiService = OpenAiService()
+        val service: AiService = AiRepository.instance.getService(provider)
         val result = service.chat(provider, sys, messages).getOrThrow()
         val assignments = CharacterAssignment.parse(result.content)
         check(assignments.isNotEmpty()) { "AI returned no valid JSON; raw: ${result.content.take(200)}" }

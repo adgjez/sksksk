@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import okhttp3.sse.EventSource
 import java.util.UUID
 
 data class ChatUiState(
@@ -46,6 +47,13 @@ class AiChatViewModel(
 
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
+
+    private var currentEventSource: EventSource? = null
+
+    override fun onCleared() {
+        super.onCleared()
+        currentEventSource?.cancel()
+    }
 
     init { refresh() }
 
@@ -80,10 +88,10 @@ class AiChatViewModel(
 
     fun retry() {
         val lastUser = _state.value.messages.lastOrNull { it.role == AiMessage.ROLE_USER } ?: return
-        // 删除 lastUser 之后的所有消息
+        // 删除 lastUser 之后的所有消息（toMutableList 避免子列表视图问题）
         val idx = _state.value.messages.indexOfLast { it.id == lastUser.id }
-        val kept = _state.value.messages.subList(0, idx)
-        _state.update { it.copy(messages = kept, error = null, streaming = null) }
+        val kept = _state.value.messages.subList(0, idx).toList()
+        _state.update { it.copy(messages = kept, error = null, streaming = null, sending = true, toolLog = emptyList()) }
         val provider = _state.value.activeProvider ?: return
         val conversation = _state.value.conversation ?: return
         if (_state.value.agentMode) {
@@ -232,6 +240,7 @@ class AiChatViewModel(
         conversation: AiConversation,
         text: String,
     ) {
+        currentEventSource?.cancel()
         val accumulated = StringBuilder()
         val stream = object : ChatStream {
             override fun onDelta(delta: String, isFinal: Boolean) {
@@ -252,21 +261,27 @@ class AiChatViewModel(
                     promptTokens = result.promptTokens,
                     completionTokens = result.completionTokens,
                 )
-                viewModelScope.launch {
-                    if (io.legado.app.help.config.AppConfig.aiChatPersist) {
+                // 直接在回调线程更新 state，不依赖 viewModelScope（避免 ViewModel 已清除时丢失）
+                if (AppConfig.aiChatPersist) {
+                    try {
                         repo.saveMessage(assistant)
                         repo.saveConversation(conversation.copy(updatedAt = System.currentTimeMillis()))
-                    }
-                    _state.update {
-                        it.copy(messages = it.messages + assistant, streaming = null, sending = false)
-                    }
+                    } catch (_: Exception) { }
+                }
+                _state.update {
+                    it.copy(
+                        messages = it.messages + assistant,
+                        streaming = null,
+                        sending = false,
+                        totalPromptTokens = it.totalPromptTokens + result.promptTokens,
+                        totalCompletionTokens = it.totalCompletionTokens + result.completionTokens,
+                    )
                 }
             }
         }
         try {
-            // 从内存 state 读历史（aiChatPersist=false 时 Room 中可能没有最新消息）
             val history = _state.value.messages
-            repo.askStream(provider, history, conversation.systemPrompt.ifBlank { "你是一个有帮助的助手。" }, stream = stream)
+            currentEventSource = repo.askStream(provider, history, conversation.systemPrompt.ifBlank { "你是一个有帮助的助手。" }, stream = stream)
         } catch (t: Throwable) {
             _state.update { it.copy(error = t.message ?: t.javaClass.simpleName, sending = false, streaming = null) }
         }

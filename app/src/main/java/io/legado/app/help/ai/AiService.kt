@@ -5,6 +5,7 @@ import io.legado.app.data.entities.AiProvider
 import io.legado.app.help.ai.tool.AiTool
 import io.legado.app.help.ai.tool.AiToolCall
 import io.legado.app.help.ai.tool.AiToolResult
+import okhttp3.sse.EventSource
 
 data class ChatResult(
     val content: String,
@@ -38,7 +39,7 @@ interface AiService {
     ): Result<ChatResult>
 
     /**
-     * 流式 chat。tool 出现时整段 tool_call 一次性 emit（流式对 tool 意义不大）。
+     * 流式 chat。返回 EventSource 引用以便调用方可以 cancel。
      */
     suspend fun chatStream(
         provider: AiProvider,
@@ -48,7 +49,7 @@ interface AiService {
         stream: ChatStream,
         temperature: Double = 0.7,
         maxTokens: Int = 2048
-    )
+    ): EventSource?
 
     suspend fun generateImage(
         provider: AiProvider,

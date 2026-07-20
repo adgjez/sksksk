@@ -335,16 +335,14 @@ private fun MessageBubble(m: AiMessage, onDelete: (AiMessage) -> Unit = {}) {
                         showMenu = false
                     }
                 )
-                if (!isUser) {
-                    DropdownMenuItem(
-                        text = { Text("删除") },
-                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                        onClick = {
-                            onDelete(m)
-                            showMenu = false
-                        }
-                    )
-                }
+                DropdownMenuItem(
+                    text = { Text("删除") },
+                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                    onClick = {
+                        onDelete(m)
+                        showMenu = false
+                    }
+                )
             }
         }
     }
