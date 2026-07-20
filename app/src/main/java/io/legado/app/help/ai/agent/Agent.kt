@@ -21,9 +21,11 @@ import io.legado.app.help.ai.tool.ListChaptersTool
 import io.legado.app.help.ai.tool.ListDeprecatedSkillsTool
 import io.legado.app.help.ai.tool.ListMySkillsTool
 import io.legado.app.help.ai.tool.ListSavedBookSourcesTool
+import io.legado.app.help.ai.tool.ReadChapterTool
 import io.legado.app.help.ai.tool.ReadMemoryTool
 import io.legado.app.help.ai.tool.ReadStatsTool
 import io.legado.app.help.ai.tool.SaveBookSourceTool
+import io.legado.app.help.ai.tool.SearchBooksTool
 import io.legado.app.help.ai.tool.SearchInBookTool
 import io.legado.app.help.ai.tool.SearchWebTool
 import io.legado.app.help.ai.tool.ValidateBookSourceTool
@@ -221,6 +223,8 @@ class Agent(
         ListDeprecatedSkillsTool(skills),
         ListChaptersTool(),
         SearchInBookTool(),
+        SearchBooksTool(),
+        ReadChapterTool(),
         SearchWebTool(),
         FetchHtmlTool(),
         SaveBookSourceTool(),

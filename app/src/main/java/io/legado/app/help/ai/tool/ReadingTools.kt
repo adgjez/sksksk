@@ -1,7 +1,9 @@
 package io.legado.app.help.ai.tool
 
+import io.legado.app.data.appDb
 import io.legado.app.help.ai.memory.AiMemoryEntry
 import io.legado.app.help.ai.memory.AiMemoryStore
+import io.legado.app.help.book.BookHelp
 import java.util.UUID
 
 /**
@@ -83,10 +85,10 @@ class ReadMemoryTool(
     }
 }
 
-/** 列出所有书源 / 触发搜索。 */
+/** 在用户书架搜索书籍（书名/作者/简介匹配）。 */
 class SearchBooksTool : AiTool {
     override val name = "search_books"
-    override val description = "在用户的书源里搜索书籍，返回匹配的书名和作者。"
+    override val description = "在用户书架搜索书籍，返回匹配的书名、作者和 bookUrl。"
     override val parametersSchema = """
         {
           "type": "object",
@@ -102,31 +104,49 @@ class SearchBooksTool : AiTool {
         val keyword = arguments["keyword"]?.toString()?.takeIf { it.isNotBlank() }
             ?: return AiToolResult("missing 'keyword'", isError = true)
         val limit = (arguments["limit"] as? Number)?.toInt() ?: 5
-        // 实际搜索由 Agent 上下文提供；这里返回占位
-        return AiToolResult("(search_books requires caller context; keyword=$keyword, limit=$limit)")
+        val books = appDb.bookDao.all
+        val kw = keyword.lowercase()
+        val matched = books.filter { b ->
+            b.name.lowercase().contains(kw) ||
+            b.author.lowercase().contains(kw) ||
+            b.introduce.orEmpty().lowercase().contains(kw)
+        }.take(limit)
+        if (matched.isEmpty()) return AiToolResult("(no books found for '$keyword')")
+        val text = matched.joinToString("\n") { b ->
+            "- ${b.name} (作者: ${b.author}) url=${b.bookUrl}"
+        }
+        return AiToolResult("找到 ${matched.size} 本:\n$text")
     }
 }
 
-/** 读指定书指定章节的正文。 */
+/** 读取指定书 URL + 章节索引的正文内容。 */
 class ReadChapterTool : AiTool {
     override val name = "read_chapter"
-    override val description = "读取指定书 URL + 章节索引的正文内容（可能很长）。"
+    override val description = "读取指定书 URL + 章节索引的正文内容（从本地缓存）。"
     override val parametersSchema = """
         {
           "type": "object",
           "properties": {
-            "bookUrl":      { "type": "string" },
-            "chapterIndex": { "type": "integer" },
+            "bookUrl":      { "type": "string", "description": "书的 bookUrl（可通过 search_books 获取）" },
+            "chapterIndex": { "type": "integer", "description": "章节索引（从0开始，可通过 list_chapters 获取）" },
             "maxChars":     { "type": "integer", "default": 4000, "description": "截断到多少字符" }
           },
           "required": ["bookUrl","chapterIndex"]
         }
     """.trimIndent()
 
-    override suspend fun execute(arguments: Map<String, Any?>): AiToolResult {
-        val bookUrl = arguments["bookUrl"]?.toString().orEmpty()
+    override suspend fun execute(arguments: Map<String, Any?>): AiToolResult = runCatching {
+        val bookUrl = arguments["bookUrl"]?.toString()?.takeIf { it.isNotBlank() }
+            ?: return AiToolResult("missing 'bookUrl'", isError = true)
         val chapterIndex = (arguments["chapterIndex"] as? Number)?.toInt()
             ?: return AiToolResult("missing 'chapterIndex'", isError = true)
-        return AiToolResult("(read_chapter needs caller context; bookUrl=$bookUrl, idx=$chapterIndex)")
-    }
+        val maxChars = (arguments["maxChars"] as? Number)?.toInt() ?: 4000
+        val chapter = appDb.bookChapterDao.getChapter(bookUrl, chapterIndex)
+            ?: return AiToolResult("chapter not found (bookUrl=$bookUrl, index=$chapterIndex)", isError = true)
+        val book = appDb.bookDao.getBook(bookUrl)
+            ?: return AiToolResult("book not found: $bookUrl", isError = true)
+        val text = BookHelp.getContent(book, chapter)?.take(maxChars)
+            ?: return AiToolResult("content not in local cache yet (bookUrl=$bookUrl, index=$chapterIndex)", isError = true)
+        AiToolResult("title=${chapter.title}\n\n$text")
+    }.getOrElse { AiToolResult("error: ${it.message}", isError = true) }
 }

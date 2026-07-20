@@ -11,6 +11,7 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import io.legado.app.data.dao.AiConversationDao
 import io.legado.app.data.dao.AiImageDao
+import io.legado.app.data.dao.AiMemoryDao
 import io.legado.app.data.dao.AiProviderDao
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookDao
@@ -42,6 +43,7 @@ import io.legado.app.data.dao.DirectLinkUploadRuleDao
 import io.legado.app.data.dao.UploadHistoryDao
 import io.legado.app.data.entities.AiConversation
 import io.legado.app.data.entities.AiImage
+import io.legado.app.data.entities.AiMemoryEntity
 import io.legado.app.data.entities.AiMessage
 import io.legado.app.data.entities.AiProvider
 import io.legado.app.data.entities.Book
@@ -91,7 +93,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 101,
+    version = 102,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -103,7 +105,8 @@ val appDb by lazy {
         CoverGalleryGroup::class, CoverGalleryImage::class, SourceRecycleBin::class,
         HomepageModule::class, HomepageCustomSet::class,
         // AI module (redesigned)
-        AiProvider::class, AiConversation::class, AiMessage::class, AiImage::class],
+        AiProvider::class, AiConversation::class, AiMessage::class, AiImage::class,
+        AiMemoryEntity::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -195,6 +198,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val aiProviderDao: AiProviderDao
     abstract val aiConversationDao: AiConversationDao
     abstract val aiImageDao: AiImageDao
+    abstract val aiMemoryDao: AiMemoryDao
 
     companion object {
 

@@ -1,79 +1,85 @@
 package io.legado.app.help.ai.memory
 
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import io.legado.app.data.appDb
+import io.legado.app.data.entities.AiMemoryEntity
 
 /**
  * AI 长期记忆。K-V + scope（global/book/session）。
  *
- * MVP 实现：进程内 list + Mutex。重启清空。后续可替换为 Room 持久化。
+ * Room 持久化实现：数据存储在 `ai_memories` 表，重启不丢失。
  *
  * Agent "自我进化" 通过 [WriteMemoryTool] 写入；查询时通过 [forPrompt]
  * 拼成 system prompt 的一段。
  */
 class AiMemoryStore {
 
-    private val mutex = Mutex()
-    private val entries = mutableListOf<AiMemoryEntry>()
+    private val dao get() = appDb.aiMemoryDao
 
     suspend fun put(entry: AiMemoryEntry) {
-        mutex.withLock {
-            // 同 (key, scope, bookKey) 则覆盖
-            entries.removeAll {
-                it.key == entry.key && it.scope == entry.scope && it.bookKey == entry.bookKey
-            }
-            entries.add(entry)
-            // 简单上限：每 scope 最多 200 条
-            val perScope = entries.filter { it.scope == entry.scope }
-            if (perScope.size > 200) {
-                val toRemove = perScope.sortedBy { it.importance }.take(perScope.size - 200)
-                entries.removeAll(toRemove.toSet())
-            }
+        val entity = entry.toEntity()
+        // 同 (key, scope, bookKey) 则覆盖
+        val existing = dao.get(entry.key, entry.scope, entry.bookKey)
+        if (existing != null) {
+            dao.upsert(entity.copy(id = existing.id))
+        } else {
+            dao.upsert(entity)
+        }
+        // 简单上限：每 scope 最多 200 条
+        val perScope = dao.getByScope(entry.scope)
+        if (perScope.size > 200) {
+            dao.deleteLeastImportant(entry.scope, perScope.size - 200)
         }
     }
 
     suspend fun get(key: String, scope: String = "global", bookKey: String = ""): AiMemoryEntry? =
-        mutex.withLock {
-            entries.firstOrNull {
-                it.key == key && it.scope == scope && it.bookKey == bookKey
-            }
-        }
+        dao.get(key, scope, bookKey)?.toEntry()
 
     suspend fun search(query: String, bookKey: String = "", limit: Int = 10): List<AiMemoryEntry> =
-        mutex.withLock {
-            entries
-                .filter { bookKey.isBlank() || it.scope == "global" || it.bookKey == bookKey }
-                .filter { e ->
-                    e.key.contains(query, ignoreCase = true) ||
-                            e.value.contains(query, ignoreCase = true)
-                }
-                .sortedByDescending { it.importance }
-                .take(limit)
-        }
+        dao.search(query, bookKey, limit).map { it.toEntry() }
 
-    suspend fun forPrompt(bookKey: String = "", maxChars: Int = 1500): String =
-        mutex.withLock {
-            val relevant = entries
-                .filter { bookKey.isBlank() || it.scope == "global" || it.bookKey == bookKey }
-                .sortedByDescending { it.importance }
-                .take(50)
-            if (relevant.isEmpty()) return@withLock ""
-            val sb = StringBuilder("## 长期记忆\n")
-            for (e in relevant) {
-                val line = "- [${e.scope}] ${e.key}: ${e.value}\n"
-                if (sb.length + line.length > maxChars) break
-                sb.append(line)
-            }
-            sb.toString()
+    suspend fun forPrompt(bookKey: String = "", maxChars: Int = 1500): String {
+        val relevant = dao.topByImportance(bookKey, 50).map { it.toEntry() }
+        if (relevant.isEmpty()) return ""
+        val sb = StringBuilder("## 长期记忆\n")
+        for (e in relevant) {
+            val line = "- [${e.scope}] ${e.key}: ${e.value}\n"
+            if (sb.length + line.length > maxChars) break
+            sb.append(line)
         }
-
-    suspend fun delete(id: String) {
-        mutex.withLock { entries.removeAll { it.id == id } }
+        return sb.toString()
     }
 
-    suspend fun size(): Int = mutex.withLock { entries.size }
+    suspend fun delete(id: String) {
+        dao.delete(id)
+    }
+
+    suspend fun size(): Int = dao.count()
 
     companion object {
         val instance by lazy { AiMemoryStore() }
     }
 }
+
+// ===== Entity ↔ Entry 转换 =====
+
+private fun AiMemoryEntry.toEntity(): AiMemoryEntity = AiMemoryEntity(
+    id = id,
+    key = key,
+    value = value,
+    scope = scope,
+    bookKey = bookKey,
+    importance = importance,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+private fun AiMemoryEntity.toEntry(): AiMemoryEntry = AiMemoryEntry(
+    id = id,
+    key = key,
+    value = value,
+    scope = scope,
+    bookKey = bookKey,
+    importance = importance,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)

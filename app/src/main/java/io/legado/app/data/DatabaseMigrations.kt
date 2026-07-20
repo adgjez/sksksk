@@ -23,7 +23,8 @@ object DatabaseMigrations {
             migration_95_96, migration_96_97, migration_97_98, migration_98_99,
             migration_99_100,
             // AI module (redesigned)
-            migration_100_101
+            migration_100_101,
+            migration_101_102
         )
     }
 
@@ -756,6 +757,29 @@ object DatabaseMigrations {
             )
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_images_providerId` ON `ai_images` (`providerId`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_images_createdAt` ON `ai_images` (`createdAt`)")
+        }
+    }
+
+    private val migration_101_102 = object : Migration(101, 102) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `ai_memories` (
+                    `id` TEXT NOT NULL,
+                    `key` TEXT NOT NULL DEFAULT '',
+                    `value` TEXT NOT NULL DEFAULT '',
+                    `scope` TEXT NOT NULL DEFAULT 'global',
+                    `bookKey` TEXT NOT NULL DEFAULT '',
+                    `importance` INTEGER NOT NULL DEFAULT 50,
+                    `createdAt` INTEGER NOT NULL DEFAULT 0,
+                    `updatedAt` INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_memories_scope` ON `ai_memories` (`scope`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_memories_bookKey` ON `ai_memories` (`bookKey`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_memories_importance` ON `ai_memories` (`importance`)")
         }
     }
 
