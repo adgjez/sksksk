@@ -146,28 +146,28 @@ class AnthropicService : AiService {
                                     }
                                 }
                                 "message_stop" -> {
-                                    completed = true
-                                    stream.onDelta("", isFinal = true)
-                                    val toolCalls = toolCallBuffers.values.map { buf ->
-                                        val argsRaw = buf.optString("input_str").ifBlank { "{}" }
-                                        AiToolCall(
-                                            id = buf.optString("id"),
-                                            name = buf.optString("name"),
-                                            arguments = AiToolCall.fromJson(argsRaw),
-                                        )
+                                    if (completed.compareAndSet(false, true)) {
+                                        stream.onDelta("", isFinal = true)
+                                        val toolCalls = toolCallBuffers.values.map { buf ->
+                                            val argsRaw = buf.optString("input_str").ifBlank { "{}" }
+                                            AiToolCall(
+                                                id = buf.optString("id"),
+                                                name = buf.optString("name"),
+                                                arguments = AiToolCall.fromJson(argsRaw),
+                                            )
+                                        }
+                                        stream.onComplete(ChatResult(
+                                            content = accumulated.toString(),
+                                            toolCalls = toolCalls,
+                                        ))
                                     }
-                                    stream.onComplete(ChatResult(
-                                        content = accumulated.toString(),
-                                        toolCalls = toolCalls,
-                                    ))
                                 }
                             }
                         }
                     }
-                    private var completed = false
+                    private val completed = java.util.concurrent.atomic.AtomicBoolean(false)
                     override fun onClosed(eventSource: EventSource) {
-                        if (!completed && accumulated.isNotEmpty()) {
-                            completed = true
+                        if (completed.compareAndSet(false, true) && accumulated.isNotEmpty()) {
                             stream.onComplete(ChatResult(content = accumulated.toString()))
                         }
                     }

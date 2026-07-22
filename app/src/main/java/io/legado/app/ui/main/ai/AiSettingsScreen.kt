@@ -179,12 +179,14 @@ private fun GlobalConfigSection() {
                 var agentDefault by remember { mutableStateOf(AppConfig.aiAgentModeDefault) }
                 var persist by remember { mutableStateOf(AppConfig.aiChatPersist) }
 
+                // 延迟写入 SP，避免每次按键都触发磁盘 IO
+                LaunchedEffect(temp) { temp.toFloatOrNull()?.let { v -> AppConfig.aiTemperature = v } }
+                LaunchedEffect(maxTok) { maxTok.toIntOrNull()?.let { v -> AppConfig.aiMaxTokens = v } }
+                LaunchedEffect(sysPrompt) { AppConfig.aiGlobalSystemPrompt = sysPrompt }
+
                 OutlinedTextField(
                     value = temp,
-                    onValueChange = {
-                        temp = it
-                        it.toFloatOrNull()?.let { v -> AppConfig.aiTemperature = v }
-                    },
+                    onValueChange = { temp = it },
                     label = { Text("Temperature (-1=默认, 0.0~2.0)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -192,10 +194,7 @@ private fun GlobalConfigSection() {
                 Spacer(Modifier.height(4.dp))
                 OutlinedTextField(
                     value = maxTok,
-                    onValueChange = {
-                        maxTok = it
-                        it.toIntOrNull()?.let { v -> AppConfig.aiMaxTokens = v }
-                    },
+                    onValueChange = { maxTok = it },
                     label = { Text("Max Tokens (0=默认)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -203,10 +202,7 @@ private fun GlobalConfigSection() {
                 Spacer(Modifier.height(4.dp))
                 OutlinedTextField(
                     value = sysPrompt,
-                    onValueChange = {
-                        sysPrompt = it
-                        AppConfig.aiGlobalSystemPrompt = it
-                    },
+                    onValueChange = { sysPrompt = it },
                     label = { Text("全局 System Prompt 前缀") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,

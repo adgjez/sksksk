@@ -60,8 +60,13 @@ class AiChatViewModel(
     fun refresh() {
         viewModelScope.launch {
             val provider = repo.listEnabledProviders().firstOrNull()
-            val conversations = repo.listConversations()
-            val conversation = conversations.firstOrNull { it.providerId == provider?.id }
+            val allConversations = repo.listConversations()
+            val conversations = if (provider != null) {
+                allConversations.filter { it.providerId == provider.id }
+            } else {
+                allConversations
+            }
+            val conversation = conversations.firstOrNull()
                 ?: ensureConversation(provider)
             val messages = conversation?.let { repo.messagesOf(it.id) } ?: emptyList()
             _state.update {
@@ -177,8 +182,15 @@ class AiChatViewModel(
                 role = AiMessage.ROLE_USER,
                 content = text,
             )
-            if (io.legado.app.help.config.AppConfig.aiChatPersist) {
+            if (AppConfig.aiChatPersist) {
                 repo.saveMessage(userMsg)
+            }
+            // 第一条消息时自动更新会话标题
+            if (_state.value.messages.isEmpty()) {
+                val title = text.take(20).replace("\n", " ")
+                val updated = conversation.copy(title = title, updatedAt = System.currentTimeMillis())
+                repo.saveConversation(updated)
+                _state.update { it.copy(conversation = updated, conversations = repo.listConversations()) }
             }
             _state.update { it.copy(messages = it.messages + userMsg) }
 

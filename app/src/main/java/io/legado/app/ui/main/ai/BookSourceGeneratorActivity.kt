@@ -14,11 +14,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -95,44 +99,47 @@ class BookSourceGeneratorViewModel : ViewModel() {
             return@launch
         }
         val skills = SkillRegistry.instance
-        // 临时激活 skill，结束后停用
+        // 临时激活 skill，结束后停用（try-finally 确保异常也能停用）
         val wasActive = skills.isActive("generate_book_source")
         if (!wasActive) skills.activate("generate_book_source")
 
-        val systemPrompt = """
-            你的任务：为用户给的网站生成一个 Legado (阅读) 兼容的 BookSource JSON。
-            用户输入：
-              - 网站 URL: ${s.url}
-              - 书源显示名: ${s.sourceName}
-              - 示例搜索关键词: ${s.sampleKeyword}
+        try {
+            val systemPrompt = """
+                你的任务：为用户给的网站生成一个 Legado (阅读) 兼容的 BookSource JSON。
+                用户输入：
+                  - 网站 URL: ${s.url}
+                  - 书源显示名: ${s.sourceName}
+                  - 示例搜索关键词: ${s.sampleKeyword}
 
-            你可以用 fetch_html 工具抓页面分析，用 save_book_source 工具保存。
-            完成后告诉用户：保存路径 + 怎么导入（base 的"书源管理 → 本地导入"）。
-        """.trimIndent()
+                你可以用 fetch_html 工具抓页面分析，用 save_book_source 工具保存。
+                完成后告诉用户：保存路径 + 怎么导入（base 的"书源管理 → 本地导入"）。
+            """.trimIndent()
 
-        val userMsg = io.legado.app.data.entities.AiMessage(
-            id = "user-1",
-            conversationId = "book_source_gen",
-            role = io.legado.app.data.entities.AiMessage.ROLE_USER,
-            content = "请为这个网站生成书源：${s.url}，书源名 ${s.sourceName}，示例搜索词 ${s.sampleKeyword}",
-        )
-        // FetchHtmlTool / SaveBookSourceTool 已在 Agent.getDefaultTools() 中，不再重复传入
-        val agent = Agent()
-        val r = agent.run(provider, systemPrompt, listOf(userMsg), extraTools = emptyList())
-        r.onSuccess { ar ->
-            val log = ar.toolLog.map { tl -> "-> ${tl.call.name}(${tl.call.arguments.entries.joinToString { "${it.key}=${it.value}" }}) -> ${tl.result.content.take(120)}" }
-            _state.update {
-                it.copy(
-                    running = false,
-                    log = log,
-                    resultJson = ar.finalText.takeIf { t -> t.contains("{") && t.contains("}") }
-                )
+            val userMsg = io.legado.app.data.entities.AiMessage(
+                id = "user-1",
+                conversationId = "book_source_gen",
+                role = io.legado.app.data.entities.AiMessage.ROLE_USER,
+                content = "请为这个网站生成书源：${s.url}，书源名 ${s.sourceName}，示例搜索词 ${s.sampleKeyword}",
+            )
+            // FetchHtmlTool / SaveBookSourceTool 已在 Agent.getDefaultTools() 中，不再重复传入
+            val agent = Agent()
+            val r = agent.run(provider, systemPrompt, listOf(userMsg), extraTools = emptyList())
+            r.onSuccess { ar ->
+                val log = ar.toolLog.map { tl -> "-> ${tl.call.name}(${tl.call.arguments.entries.joinToString { "${it.key}=${it.value}" }}) -> ${tl.result.content.take(120)}" }
+                _state.update {
+                    it.copy(
+                        running = false,
+                        log = log,
+                        resultJson = ar.finalText.takeIf { t -> t.contains("{") && t.contains("}") }
+                    )
+                }
+            }.onFailure { t ->
+                _state.update { it.copy(running = false, error = t.message ?: t.javaClass.simpleName) }
             }
-        }.onFailure { t ->
-            _state.update { it.copy(running = false, error = t.message ?: t.javaClass.simpleName) }
+        } finally {
+            // 结束后停用临时激活的 skill
+            if (!wasActive) skills.deactivate("generate_book_source")
         }
-        // 结束后停用临时激活的 skill
-        if (!wasActive) skills.deactivate("generate_book_source")
     }
 }
 
@@ -143,7 +150,16 @@ private fun BookSourceGeneratorScreen(onFinish: () -> Unit) {
     val state by vm.state.collectAsState()
     val scope = rememberCoroutineScope()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("AI 生成书源") }) }) { padding ->
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("AI 生成书源") },
+            navigationIcon = {
+                IconButton(onClick = onFinish) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                }
+            }
+        )
+    }) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

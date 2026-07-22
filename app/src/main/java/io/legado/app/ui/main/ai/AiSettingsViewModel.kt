@@ -54,7 +54,7 @@ class AiSettingsViewModel(
             _state.update { it.copy(testResult = "✗ API URL 不能为空") }
             return
         }
-        if (p.apiKey.isBlank()) {
+        if (p.apiKey.isBlank() && p.type != AiProvider.TYPE_OLLAMA) {
             _state.update { it.copy(testResult = "✗ API Key 不能为空") }
             return
         }
